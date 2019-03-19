@@ -1,0 +1,9 @@
+[Unit]
+Description=Sailfish Unlock Agent
+DefaultDependencies=no
+Conflicts=shutdown.target emergency.service
+Before=shutdown.target
+
+[Service]
+ExecStart=/usr/bin/unlock-agent
+SuccessExitStatus=0 8
