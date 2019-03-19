@@ -13,82 +13,55 @@
 
 #define USECS(tp) (tp.tv_sec * 1000000L + tp.tv_nsec / 1000L)
 #define MATCH(s, n) (strcmp(section, s) == 0 && strcmp(name, n) == 0)
+#define FREE_LIST(l, c, i) for (i = 0; i < c; i++) free(l[i]); free(l);
+#define STRCCAT(d, s, m) strncat(d, s, sizeof(d) - strlen(m) - 1); \
+	d[sizeof(d) - 1] = '\0';
+#define STRCCPY(d, s) strncpy(d, s, sizeof(d) - 1); \
+	d[sizeof(d) - 1] = '\0';
 
 #define TEMPORARY_PASSWORD "guitar"
 
 const char *ask_dir = "/run/systemd/ask-password/";
 
 typedef struct {
-	char *ask_file;
+	char ask_file[108];
 	int pid;
-	char *socket;
+	char socket[108];
 	int accept_cached;
 	int echo;
 	long not_after;
-	char *id;
-	char *message;
+	char id[10];
+	char message[100];
 } ask_info_t;
 
 typedef int (*hide_callback_t)(void *cb_data);
 
-ask_info_t * ask_info_new(char *ask_file)
+static inline ask_info_t * ask_info_new(char *ask_file)
 {
 	ask_info_t *ask_info = (ask_info_t *)malloc(sizeof(ask_info_t));
 	if (ask_info == NULL)
 		return NULL;
-	ask_info->ask_file = ask_file;
-	ask_info->socket = NULL;
+	STRCCPY(ask_info->ask_file, ask_dir);
+	STRCCAT(ask_info->ask_file, ask_file, ask_dir);
+	ask_info->pid = -1;
+	ask_info->socket[0] = '\0';
+	ask_info->accept_cached = -1;
 	ask_info->echo = 0;
 	ask_info->not_after = -1;
-	ask_info->id = NULL;
-	ask_info->message = NULL;
+	ask_info->id[0] = '\0';
+	ask_info->message[0] = '\0';
 	return ask_info;
 }
 
-void ask_info_free(ask_info_t *ask_info)
+int is_ask_file(const struct dirent *ep)
 {
-	if (ask_info == NULL)
-		return;
-	free(ask_info->ask_file);
-	if (ask_info->socket != NULL)
-		free(ask_info->socket);
-	if (ask_info->id != NULL)
-		free(ask_info->id);
-	if (ask_info->message != NULL)
-		free(ask_info->message);
-	free(ask_info);
-}
+	if (ep->d_type != DT_REG)
+		return 0;
 
-// If new file is found, allocates ask_info and returns 1,
-// if nothing was found, returns 0,
-// and in case of an error returns a negative value.
-int find_next_ini_file(DIR *dp, ask_info_t **ask_info)
-{
-	struct dirent *ep;
-	char *filename;
+	if (strncmp(ep->d_name, "ask.", 4) != 0)
+		return 0;
 
-	while ((ep = readdir(dp)) != NULL) {
-		if (ep->d_type != DT_REG)
-			continue;
-
-		if (strncmp(ep->d_name, "ask.", 4) != 0)
-			continue;
-
-		filename = (char *)malloc(
-				strlen(ask_dir) + strlen(ep->d_name) + 1);
-		strcpy(filename, ask_dir);
-		strcat(filename, ep->d_name);
-
-		*ask_info = ask_info_new(filename);
-		if (*ask_info == NULL) {
-			free(filename);
-			return -ENOMEM;
-		}
-
-		return 1;
-	}
-
-	return 0;
+	return 1;
 }
 
 int time_in_past(long time)
@@ -106,42 +79,44 @@ int handle_ini_line(void *user, const char *section, const char *name,
 {
 	ask_info_t *ask_info = (ask_info_t *)user;
 
-	if (MATCH("Ask", "PID"))
+	if (MATCH("Ask", "PID")) {
 		ask_info->pid = atoi(value);
 
-	else if (MATCH("Ask", "Socket"))
-		ask_info->socket = strdup(value);
+	} else if (MATCH("Ask", "Socket")) {
+		STRCCPY(ask_info->socket, value);
 
-	else if (MATCH("Ask", "AcceptCached"))
+	} else if (MATCH("Ask", "AcceptCached")) {
 		ask_info->accept_cached = atoi(value);
 
-	else if (MATCH("Ask", "Echo"))
+	} else if (MATCH("Ask", "Echo")) {
 		ask_info->echo = atoi(value);
 
-	else if (MATCH("Ask", "NotAfter"))
+	} else if (MATCH("Ask", "NotAfter")) {
 		ask_info->not_after = atol(value);
 
-	else if (MATCH("Ask", "Id"))
-		ask_info->id = strdup(value);
+	} else if (MATCH("Ask", "Id")) {
+		STRCCPY(ask_info->id, value);
 
-	else if (MATCH("Ask", "Message"))
-		ask_info->message = strdup(value);
+	} else if (MATCH("Ask", "Message")) {
+		STRCCPY(ask_info->message, value);
+	}
 
 	return 1;
 }
 
 // TODO: malloc buf if password is not fixed maximum size (now 30 char)
-int send_password(ask_info_t *ask_info, const char *password, int len)
+static inline int send_password(ask_info_t *ask_info, const char *password,
+				int len)
 {
 	char buf[32];
-	int sd, err;
+	int sd;
 	struct sockaddr_un name;
 
 	if (len >= 0) {
 		buf[0] = '+';
 		if (password != NULL) {  // Just to be sure
-			strncpy(buf+1, password, sizeof(buf)-1);
-			buf[sizeof(buf)-1] = '\0';
+			strncpy(buf + 1, password, sizeof(buf) - 1);
+			buf[sizeof(buf) - 1] = '\0';
 			len = strlen(buf);
 		} else
 			len = 1;
@@ -199,46 +174,57 @@ int hide_dialog(void *cb_data)
 	return 0;
 }
 
-// FIXME: Might not work well if new files are added to the directory
 int main(void)
 {
 	ask_info_t *ask_info;
-	DIR *dp;
+	int count, i, ret;
+	struct dirent **files;
 	char *password;
-	int ret;
 
-	dp = opendir(ask_dir);
-	if (dp == NULL)
-		return ENOENT;
+	count = scandir(ask_dir, &files, is_ask_file, alphasort);
+	if (count == -1)
+		return 1;
 
-	while ((ret = find_next_ini_file(dp, &ask_info)) == 1) {
+	if (count < 1) {
+		FREE_LIST(files, count, i);
+		return 8;
+	}
+
+	for (i = 0; i < count; i++) {
+		ret = 0;
 		password = NULL;
+		ask_info = ask_info_new(files[i]->d_name);
+		if (ask_info == NULL) {
+			ret = -ENOMEM;
+			break;
+		}
 
 		if (ini_parse(ask_info->ask_file, handle_ini_line,
 					ask_info) < 0)
-			continue;
+			goto next;
 
 		if (time_in_past(ask_info->not_after) == 1)
-			continue;
+			goto next;
 
 		if (kill(ask_info->pid, 0) == ESRCH)
-			continue;
+			goto next;
 
 		ret = get_password(ask_info->message, ask_info->echo,
 					&hide_dialog, ask_info, &password);
 		ret = send_password(ask_info, password, ret);
 
 		free(password);
-		ask_info_free(ask_info);
+next:
+		free(ask_info);
 
 		if (ret < 0)
 			break;
 	}
 
-	closedir(dp);
+	FREE_LIST(files, count, i);
 
 	if (ret < 0)
-		return -ret;
+		return 1;
 
 	return 0;
 }
