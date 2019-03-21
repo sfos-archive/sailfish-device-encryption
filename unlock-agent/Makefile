@@ -3,6 +3,7 @@ LDFLAGS=-flto
 INSTALL=install
 INSTALL_PROGRAM=$(INSTALL)
 BINDIR=/usr/bin
+UNITDIR=/lib/systemd/system
 SRCDIR=
 
 all: agent
@@ -16,7 +17,18 @@ agent: agent.c libinih.a
 install-agent: agent
 	$(INSTALL_PROGRAM) -D $(SRCDIR)$< $(DESTDIR)$(BINDIR)/unlock-$<
 
-install: install-agent
+service-directory:
+	install -d $(DESTDIR)$(UNITDIR)
+	install -d $(DESTDIR)$(UNITDIR)/sysinit.target.wants
+
+install-path-file: systemd/sailfish-unlock-agent.path service-directory
+	install -m0644 $(SRCDIR)$< $(DESTDIR)$(UNITDIR)/sailfish-unlock-agent.path
+	ln -s ../sailfish-unlock-agent.path $(DESTDIR)$(UNITDIR)/sysinit.target.wants/
+
+install-service-file: systemd/sailfish-unlock-agent.service service-directory
+	install -m0644 $(SRCDIR)$< $(DESTDIR)$(UNITDIR)/sailfish-unlock-agent.service
+
+install: install-agent install-path-file install-service-file
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/unlock-agent

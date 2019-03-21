@@ -1,0 +1,9 @@
+[Unit]
+Description=Dispatch Password Requests to Sailfish Unlock Agent
+DefaultDependencies=no
+Conflicts=shutdown.target emergency.service
+Before=paths.target shutdown.target cryptsetup.target
+
+[Path]
+DirectoryNotEmpty=/run/systemd/ask-password
+MakeDirectory=yes
