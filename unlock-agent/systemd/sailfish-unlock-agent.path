@@ -1,8 +1,8 @@
 [Unit]
 Description=Dispatch Password Requests to Sailfish Unlock Agent
 DefaultDependencies=no
-Conflicts=shutdown.target emergency.service
-Before=paths.target shutdown.target cryptsetup.target
+Conflicts=shutdown.target emergency.service display.service
+Before=paths.target shutdown.target cryptsetup.target display.service
 
 [Path]
 DirectoryNotEmpty=/run/systemd/ask-password
