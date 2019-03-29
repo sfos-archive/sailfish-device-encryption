@@ -5,5 +5,5 @@ Conflicts=shutdown.target emergency.service display.service
 Before=shutdown.target display.service
 
 [Service]
-ExecStart=/usr/bin/unlock-agent
+ExecStart=/usr/sbin/sailfish-unlock-ui
 SuccessExitStatus=0 8

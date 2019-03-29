@@ -2,7 +2,6 @@
 
 #include <dirent.h>
 #include <errno.h>
-#include <ini.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +9,12 @@
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <time.h>
+#include <iostream>
+
+#include <sailfish-minui/eventloop.h>
+
+#include "ini.h"
+#include "pin.h"
 
 #define USECS(tp) (tp.tv_sec * 1000000L + tp.tv_nsec / 1000L)
 #define MATCH(s, n) (strcmp(section, s) == 0 && strcmp(name, n) == 0)
@@ -68,7 +73,7 @@ int time_in_past(long time)
 {
     struct timespec tp;
 
-    if (clock_gettime(CLOCK_MONOTONIC, &tp) == 0 && time < USECS(tp))
+    if (time > 0 && clock_gettime(CLOCK_MONOTONIC, &tp) == 0 && time < USECS(tp))
         return 1;
 
     return 0;
@@ -151,11 +156,18 @@ int get_password(const char *message, int echo, hide_callback_t cb,
     if (cb(cb_data) == 1)  // Check callback on every "iteration"
         return -1;  // Cancelled
 
-    *password = strdup(TEMPORARY_PASSWORD);
+    MinUi::EventLoop eventLoop;
+    PinUi pinUi(&eventLoop);
+    eventLoop.execute();
+    std::string code = pinUi.code();
+    std::cout << "code:" << code << std::endl;
+
+    if (code.empty()) *password = strdup(TEMPORARY_PASSWORD);
+    else *password = strdup(code.c_str());
     if (*password == NULL)
         return -ENOMEM;
 
-    return strlen(TEMPORARY_PASSWORD);  // Length of the password given
+    return strlen(*password);  // Length of the password given
 }
 
 // TODO: May be rewritten to use the event loop system of minui
