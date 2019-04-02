@@ -1,0 +1,7 @@
+[Unit]
+Description=Encrypts home partition
+
+[Service]
+Type=dbus
+BusName=org.sailfishos.EncryptionService
+ExecStart=/usr/sbin/sailfish-encryption-service
