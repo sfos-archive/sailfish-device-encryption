@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=org.sailfishos.EncryptionService
+Exec=/bin/false
+User=root
+SystemdService=dbus-org.sailfishos.EncryptionService.service
