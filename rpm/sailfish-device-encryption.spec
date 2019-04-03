@@ -62,6 +62,9 @@ pushd encryption-service
 make DESTDIR=%{buildroot} install
 mkdir -p %{buildroot}/%{unitdir}/sysinit.target.wants/
 ln -s ../dbus-%{dbusname}.service %{buildroot}/%{unitdir}/sysinit.target.wants/
+mkdir -p %{buildroot}/%{unitdir}/local-fs.target.wants/
+ln -s ../home-encryption-preparation.service \
+      %{buildroot}/%{unitdir}/local-fs.target.wants/
 popd
 
 %files
@@ -82,3 +85,6 @@ popd
 %{unitdir}/sysinit.target.wants/dbus-%{dbusname}.service
 %{dbus_system_dir}/%{dbusname}.conf
 %{dbus_service_dir}/%{dbusname}.service
+%{unitdir}/home-encryption-preparation.service
+%{unitdir}/local-fs.target.wants/home-encryption-preparation.service
+%{_datadir}/%{name}

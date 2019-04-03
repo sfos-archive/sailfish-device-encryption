@@ -65,7 +65,7 @@ typedef struct {
     gchar *passphrase;
 } invocation_data;
 
-void invocation_data_free(invocation_data *data)
+static inline void invocation_data_free(invocation_data *data)
 {
     g_object_unref(data->connection);
     g_object_unref(data->manager);
@@ -74,7 +74,7 @@ void invocation_data_free(invocation_data *data)
     g_free(data);
 }
 
-static void end_encryption_to_failure(invocation_data *data)
+static inline void end_encryption_to_failure(invocation_data *data)
 {
     set_status(ENCRYPTION_FAILED);
     invocation_data_free(data);
@@ -358,14 +358,14 @@ gboolean start_to_encrypt(gchar *passphrase)
     if (status != ENCRYPTION_NOT_STARTED)
         return FALSE;
 
+    set_status(ENCRYPTION_IN_PREPARATION);
     data = g_new0(invocation_data, 1);
     data->passphrase = passphrase;
-    set_status(ENCRYPTION_IN_PREPARATION);
     g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, data);
     return TRUE;
 }
 
-encryption_state get_encryption_status()
+encryption_state get_encryption_status(void)
 {
     return status;
 }

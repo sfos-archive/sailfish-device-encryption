@@ -15,6 +15,7 @@
 #define ENCRYPTION_FAILED_ERROR BUS_NAME ".Failed"
 #define ENCRYPTION_METHOD "BeginEncryption"
 #define ENCRYPTION_FINISHED_SIGNAL "EncryptionFinished"
+#define FINALIZATION_METHOD "FinalizeEncryption"
 
 static const gchar introspection_xml[] =
     "<node>"
@@ -22,6 +23,7 @@ static const gchar introspection_xml[] =
     "<method name=\"" ENCRYPTION_METHOD "\">"
     "<arg name=\"passphrase\" direction=\"in\" type=\"s\"></arg>"
     "</method>"
+    "<method name=\"" FINALIZATION_METHOD "\"></method>"
     "<signal name=\"" ENCRYPTION_FINISHED_SIGNAL "\">"
     "<arg name=\"success\" type=\"b\" />"
     "<arg name=\"error\" type=\"s\" />"
@@ -36,6 +38,7 @@ static struct {
     guint encrypt_iface_id;
     GDBusInterfaceVTable *encrypt_iface_vtable;
     encrypt_call_handler encrypt_method;
+    finalize_call_handler finalize_method;
 } data;
 
 static void bus_acquired_handler(
@@ -95,12 +98,21 @@ void method_call_handler(
     gchar *passphrase;
 
     // Currently doesn't check path or interface name because
-    // this implements only one method and GDBus checks for other things
+    // this implements only one interface on only one path
+    // and GDBus checks for them and also that parameters exist
+    // and are of correct type.
     if (strcmp(method_name, ENCRYPTION_METHOD) == 0) {
         g_variant_iter_init(&iter, parameters);
         g_variant_iter_next(&iter, "s", &passphrase);
 
         if (data.encrypt_method(passphrase, &error)) {
+            g_dbus_method_invocation_return_value(invocation, NULL);
+        } else {
+            g_dbus_method_invocation_return_gerror(invocation, error);
+            g_error_free(error);
+        }
+    } else if (strcmp(method_name, FINALIZATION_METHOD) == 0) {
+        if (data.finalize_method(&error)) {
             g_dbus_method_invocation_return_value(invocation, NULL);
         } else {
             g_dbus_method_invocation_return_gerror(invocation, error);
@@ -113,9 +125,12 @@ void method_call_handler(
     }
 }
 
-void init_dbus(encrypt_call_handler encrypt_method)
+void init_dbus(
+        encrypt_call_handler encrypt_method,
+        finalize_call_handler finalize_method)
 {
     data.encrypt_method = encrypt_method;
+    data.finalize_method = finalize_method;
 
     data.info = g_dbus_node_info_new_for_xml(introspection_xml, NULL);
     g_assert(data.info != NULL);

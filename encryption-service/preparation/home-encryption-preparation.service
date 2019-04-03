@@ -1,0 +1,15 @@
+[Unit]
+Description=Home encryption preparation service
+After=home.mount
+Before=multi-user.target
+ConditionPathExists=|!/home/nemo/.jolla-startupwizard-usersession-done
+ConditionPathExists=|!/home/nemo/.jolla-startupwizard-done
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh /usr/share/sailfish-device-encryption/home-encryption-preparation.sh
+ExecStop=/bin/sh /usr/share/sailfish-device-encryption/home-encryption-finish.sh
+
+[Install]
+WantedBy=local-fs.target
