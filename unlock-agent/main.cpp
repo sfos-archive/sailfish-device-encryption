@@ -153,6 +153,9 @@ int get_password(const char *message, int echo, hide_callback_t cb,
 {
     // Temporary implementation, to be replaced
     // message is to be printed, echo tell whether to show password or not
+    (void)message;
+    (void)echo;
+
     if (cb(cb_data) == 1)  // Check callback on every "iteration"
         return -1;  // Cancelled
 
