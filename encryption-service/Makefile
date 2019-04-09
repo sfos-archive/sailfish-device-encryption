@@ -14,7 +14,7 @@ INSTALL = install -D
 all: encryption-service
 
 encryption-service: dbus.o encrypt.o main.c
-	$(CC) $(CFLAGS) $(LIBS) -o $@ $^
+	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 install-service-file: dbus-$(DBUSNAME).service
 	$(INSTALL) $< $(DESTDIR)/$(UNITDIR)/$<
