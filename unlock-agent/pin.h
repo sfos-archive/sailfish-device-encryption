@@ -3,7 +3,6 @@
  */
 
 #include <sailfish-minui/ui.h>
-//#include <sailfish-minui/keypad.h>
 
 using namespace Sailfish;
 
