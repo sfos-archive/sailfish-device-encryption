@@ -16,6 +16,6 @@ typedef void (*encryption_status_changed)(encryption_state);
 
 void init_encryption_service(encryption_status_changed);
 gboolean start_to_encrypt(gchar *passphrase);
-encryption_state get_encryption_status();
+encryption_state get_encryption_status(void);
 
 #endif // __ENCRYPT_H

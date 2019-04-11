@@ -5,6 +5,7 @@ override CFLAGS += $(shell pkg-config --cflags udisks2)
 LIBS += $(shell pkg-config --libs udisks2)
 
 BINDIR = /usr/sbin
+DATADIR = /usr/share/sailfish-device-encryption
 UNITDIR = /lib/systemd/system
 DBUSNAME = org.sailfishos.EncryptionService
 DBUS_SYSTEM_DIR = /usr/share/dbus-1/system.d
@@ -13,8 +14,18 @@ INSTALL = install -D
 
 all: encryption-service
 
-encryption-service: dbus.o encrypt.o main.c
+encryption-service: dbus.o encrypt.o manage.o main.c
 	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+
+install-preparation: preparation/home-encryption-preparation.service \
+		preparation/home-encryption-preparation.sh \
+		preparation/home-encryption-finish.sh
+	$(INSTALL) preparation/home-encryption-preparation.service \
+		$(DESTDIR)/$(UNITDIR)/home-encryption-preparation.service
+	$(INSTALL) preparation/home-encryption-preparation.sh \
+		$(DESTDIR)/$(DATADIR)/home-encryption-preparation.sh
+	$(INSTALL) preparation/home-encryption-finish.sh \
+		$(DESTDIR)/$(DATADIR)/home-encryption-finish.sh
 
 install-service-file: dbus-$(DBUSNAME).service
 	$(INSTALL) $< $(DESTDIR)/$(UNITDIR)/$<
@@ -28,8 +39,9 @@ install-bus-config: $(DBUSNAME).conf
 install: encryption-service \
 		install-bus-config \
 		install-dbus-file \
-		install-service-file
+		install-service-file \
+		install-preparation
 	$(INSTALL) $< $(DESTDIR)/$(BINDIR)/sailfish-encryption-service
 
 clean:
-	rm -f dbus.o encrypt.o encryption-service
+	rm -f dbus.o encrypt.o manage.o encryption-service

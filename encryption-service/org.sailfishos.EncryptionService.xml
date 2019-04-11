@@ -6,9 +6,10 @@
     <method name="BeginEncryption">
         <arg name="passphrase" direction="in" type="s"></arg>
     </method>
+    <method name="FinalizeEncryption"></method>
     <signal name="EncryptionFinished">
-	<arg name="success" type="b" />
-	<arg name="error" type="s" />
+        <arg name="success" type="b" />
+        <arg name="error" type="s" />
     </signal>"
   </interface>
 </node>
