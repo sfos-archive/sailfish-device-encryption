@@ -6,7 +6,8 @@ CONFIG += link_pkgconfig
 CONFIG += sailfish-minui-resources
 
 PKGCONFIG += \
-    sailfish-minui
+    sailfish-minui \
+    sailfish-minui-dbus
 
 HEADERS += \
     pin.h

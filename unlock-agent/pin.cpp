@@ -4,6 +4,7 @@
 
 #include <sailfish-minui/eventloop.h>
 #include <sailfish-minui/ui.h>
+#include <sailfish-mindbus/object.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -15,6 +16,16 @@
 #include "pin.h"
 
 #define ACCEPT_CODE 28
+
+// Values taken from startupwizard screenblank.cpp
+#define BLANKING_TIMEOUT 10000
+#define MCE_SERVICE "com.nokia.mce"
+#define MCE_REQUEST_PATH "/com/nokia/mce/request"
+#define MCE_REQUEST "com.nokia.mce.request"
+#define MCE_NOTIFICATION_BEGIN "notification_begin_req"
+#define MCE_NOTIFICATION_ID "startupwizard"
+#define MCE_NOTIFICATION_DURATION 30000
+#define MCE_NOTIFICATION_EXTEND 5000
 
 using namespace Sailfish;
 
@@ -60,6 +71,14 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop) : MinUi::Window(eventLoop)
                 }
             });
         } else if (character) m_pw.setText(m_pw.text() + character);
+    });
+
+    // Timer to keep display from blanking
+    eventLoop->createTimer(BLANKING_TIMEOUT, [this]() {
+        MinDBus::Object mce {MinDBus::systemBus(), MCE_SERVICE,
+            MCE_REQUEST_PATH, MCE_REQUEST};
+        mce.call(MCE_NOTIFICATION_BEGIN, MCE_NOTIFICATION_ID,
+            MCE_NOTIFICATION_DURATION, MCE_NOTIFICATION_EXTEND);
     });
 }
 
