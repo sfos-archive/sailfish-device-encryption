@@ -35,6 +35,12 @@ Password agent to unlock encrypted partitions on device boot.
 
 %package service
 Summary:  Sailfish Encryption Service
+# Packages of commands required by home-encryption-*.sh scripts
+Requires: grep
+Requires: shadow-utils
+Requires: systemd
+Requires: util-linux
+Requires: oneshot
 
 %description service
 Encrypts home partition on request.
