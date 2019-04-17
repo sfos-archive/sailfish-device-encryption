@@ -5,11 +5,17 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/inotify.h>
+#include <sys/select.h>
 #include <sys/un.h>
-#include <time.h>
+
 #include <iostream>
+
+#include <libudev.h>
 
 #include <sailfish-minui/eventloop.h>
 
@@ -24,9 +30,8 @@
 #define STRCCPY(d, s) strncpy(d, s, sizeof(d) - 1); \
     d[sizeof(d) - 1] = '\0';
 
-#define TEMPORARY_PASSWORD "guitar"
-
 const char *ask_dir = "/run/systemd/ask-password/";
+const char* TEMP_DM_NAME = "temporary-cryptsetup-";
 
 typedef struct {
     char ask_file[108];
@@ -40,6 +45,11 @@ typedef struct {
 } ask_info_t;
 
 typedef int (*hide_callback_t)(void *cb_data);
+
+char s_socket[108];
+
+// Declarations
+int ask_scan();
 
 static inline ask_info_t * ask_info_new(char *ask_file)
 {
@@ -110,7 +120,7 @@ int handle_ini_line(void *user, const char *section, const char *name,
 }
 
 // TODO: malloc buf if password is not fixed maximum size (now 30 char)
-static inline int send_password(ask_info_t *ask_info, const char *password,
+static inline int send_password(const char *path, const char *password,
                                 int len)
 {
     char buf[32];
@@ -134,7 +144,7 @@ static inline int send_password(ask_info_t *ask_info, const char *password,
         return -errno;
 
     name.sun_family = AF_UNIX;
-    strncpy(name.sun_path, ask_info->socket, sizeof(name.sun_path));
+    strncpy(name.sun_path, path, sizeof(name.sun_path));
     name.sun_path[sizeof(name.sun_path) - 1] = '\0';
 
     if (connect(sd, (struct sockaddr *)&name, SUN_LEN(&name)) != 0)
@@ -146,31 +156,62 @@ static inline int send_password(ask_info_t *ask_info, const char *password,
     return len;
 }
 
-// TODO: Needs to be re-engineered to work with minui event loop stuff,
-// but this works for now and represents how I thought it'd work
-int get_password(const char *message, int echo, hide_callback_t cb,
-            void *cb_data, char **password)
+void pin(const std::string& code)
 {
-    // Temporary implementation, to be replaced
-    // message is to be printed, echo tell whether to show password or not
-    (void)message;
-    (void)echo;
+    if (send_password(s_socket, code.c_str(), code.length()) < code.length()) {
+        // TODO: password send failed
+        fprintf(stderr, "send_password failed\n");
+    }
 
-    if (cb(cb_data) == 1)  // Check callback on every "iteration"
-        return -1;  // Cancelled
+    // Wait for either the luks device to appear or new ask file
+    struct udev* udev = udev_new();
+    struct udev_monitor* mon = udev_monitor_new_from_netlink(udev, "udev");
+    udev_monitor_filter_add_match_subsystem_devtype(mon, "block", NULL);
+    udev_monitor_enable_receiving(mon);
+    int ufd = udev_monitor_get_fd(mon);
 
-    MinUi::EventLoop eventLoop;
-    PinUi pinUi(&eventLoop);
-    eventLoop.execute();
-    std::string code = pinUi.code();
-    std::cout << "code:" << code << std::endl;
+    int fd = inotify_init1(IN_NONBLOCK);
 
-    if (code.empty()) *password = strdup(TEMPORARY_PASSWORD);
-    else *password = strdup(code.c_str());
-    if (*password == NULL)
-        return -ENOMEM;
-
-    return strlen(*password);  // Length of the password given
+    if (fd > 0 && ufd > 0) {
+        int askWatch = inotify_add_watch(fd, ask_dir, IN_CREATE);
+        fd_set rfds;
+        FD_ZERO(&rfds);
+        FD_SET(fd, &rfds);
+        FD_SET(ufd, &rfds);
+        bool exitMain = false;
+        bool notifyOk = false;
+        while (!notifyOk) {
+            if (select(std::max(fd, ufd) + 1, &rfds, NULL, NULL, NULL) > 0) {
+                if (FD_ISSET(fd, &rfds)) {
+                    // New ask file
+                    // Short wait otherwise the ask file is not there yet
+                    sleep(1);
+                    if (!ask_scan())
+                        notifyOk = true;
+                } else if (FD_ISSET(ufd, &rfds)) {
+                    // Change in udev block devices
+                    struct udev_device* dev = udev_monitor_receive_device(mon);
+                    if (udev_device_get_devnode(dev)) {
+                        const char* action = udev_device_get_action(dev);
+                        // Must be change
+                        if (!strcmp(action, "change")) {
+                            const char* name = udev_device_get_property_value(dev, "DM_NAME");
+                            if (name && strncmp(name, TEMP_DM_NAME, strlen(TEMP_DM_NAME))) {
+                                // DM_NAME without temp name means the unlocked device appeared
+                                notifyOk = true;
+                                exitMain = true;
+                            }
+                        }
+                    }
+                    udev_device_unref(dev);
+                }
+            }
+        }
+        close(fd);
+        close(ufd);
+        // App exit if udev says the device appeared
+        if (exitMain) PinUi::instance()->exit(0);
+    }
 }
 
 // TODO: May be rewritten to use the event loop system of minui
@@ -189,12 +230,32 @@ int hide_dialog(void *cb_data)
     return 0;
 }
 
-int main(void)
+static inline ask_info_t* ask_parse(char* ask_file)
+{
+    ask_info_t* ask_info = ask_info_new(ask_file);
+    if (ask_info) {
+        if (ini_parse(ask_info->ask_file, handle_ini_line,
+                      ask_info) < 0) {
+            free(ask_info);
+            return NULL;
+        }
+        if (time_in_past(ask_info->not_after) == 1) {
+            free(ask_info);
+            return NULL;
+        }
+        if (kill(ask_info->pid, 0) == ESRCH) {
+            free(ask_info);
+            return NULL;
+        }
+    }
+    return ask_info;
+}
+
+int ask_scan()
 {
     ask_info_t *ask_info;
-    int count, i, ret;
+    int count, i, ret = 0;
     struct dirent **files;
-    char *password;
 
     count = scandir(ask_dir, &files, is_ask_file, alphasort);
     if (count == -1)
@@ -206,40 +267,31 @@ int main(void)
     }
 
     for (i = 0; i < count; i++) {
-        ret = 0;
-        password = NULL;
-        ask_info = ask_info_new(files[i]->d_name);
-        if (ask_info == NULL) {
-            ret = -ENOMEM;
+        ask_info = ask_parse(files[i]->d_name);
+        if (!ask_info) {
+            ret = -1;
             break;
         }
 
-        if (ini_parse(ask_info->ask_file, handle_ini_line,
-                      ask_info) < 0)
-            goto next;
+        // Save the socket for later use
+        strcpy(s_socket, ask_info->socket);
+        // Start the UI
+        PinUi* ui = PinUi::instance();
+        ui->reset();
+        // Execute does nothing if the UI is already running
+        int rv = ui->execute(pin);
+        if (rv != -1) ret = rv;
 
-        if (time_in_past(ask_info->not_after) == 1)
-            goto next;
-
-        if (kill(ask_info->pid, 0) == ESRCH)
-            goto next;
-
-        ret = get_password(ask_info->message, ask_info->echo,
-                           &hide_dialog, ask_info, &password);
-        ret = send_password(ask_info, password, ret);
-
-        free(password);
-next:
         free(ask_info);
-
-        if (ret < 0)
-            break;
     }
 
     FREE_LIST(files, count, i);
 
-    if (ret < 0)
-        return 1;
+    return ret;
+}
 
-    return 0;
+int main(void)
+{
+    // Check ask files and start the UI if needed
+    return ask_scan();
 }

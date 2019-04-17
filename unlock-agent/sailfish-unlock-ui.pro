@@ -7,7 +7,8 @@ CONFIG += sailfish-minui-resources
 
 PKGCONFIG += \
     sailfish-minui \
-    sailfish-minui-dbus
+    sailfish-minui-dbus \
+    libudev
 
 HEADERS += \
     pin.h
