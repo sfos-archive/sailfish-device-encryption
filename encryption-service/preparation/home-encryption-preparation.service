@@ -2,8 +2,7 @@
 Description=Home encryption preparation service
 After=home.mount
 Before=multi-user.target
-ConditionPathExists=|!/home/nemo/.jolla-startupwizard-usersession-done
-ConditionPathExists=|!/home/nemo/.jolla-startupwizard-done
+ConditionPathExists=/var/lib/sailfish-device-encryption/encrypt-home
 
 [Service]
 Type=oneshot
