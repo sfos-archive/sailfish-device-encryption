@@ -74,6 +74,8 @@ ln -s ../home-encryption-preparation.service \
       %{buildroot}/%{unitdir}/local-fs.target.wants/
 popd
 
+mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
+
 %files
 
 %files agent
@@ -95,3 +97,4 @@ popd
 %{unitdir}/home-encryption-preparation.service
 %{unitdir}/local-fs.target.wants/home-encryption-preparation.service
 %{_datadir}/%{name}
+%dir %{_sharedstatedir}/%{name}
