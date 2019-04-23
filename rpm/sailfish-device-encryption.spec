@@ -19,6 +19,8 @@ BuildRequires: sailfish-minui-dbus-devel
 BuildRequires: sailfish-minui-label-tool
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(udisks2)
+BuildRequires: pkgconfig(libudev)
+BuildRequires: mce-headers
 Requires:      %{name}-agent
 Requires:      %{name}-service
 
