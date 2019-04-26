@@ -12,10 +12,9 @@
 #include <sys/inotify.h>
 #include <sys/select.h>
 #include <sys/un.h>
+#include <libudev.h>
 
 #include <iostream>
-
-#include <libudev.h>
 
 #include <sailfish-minui/eventloop.h>
 
@@ -46,7 +45,8 @@ typedef struct {
 
 typedef int (*hide_callback_t)(void *cb_data);
 
-char s_socket[108];
+char s_socket[108] = "";
+char s_ask[108] = "";
 
 // Declarations
 int ask_scan();
@@ -175,19 +175,33 @@ void pin(const std::string& code)
     if (fd > 0 && ufd > 0) {
         int askWatch = inotify_add_watch(fd, ask_dir, IN_CREATE);
         fd_set rfds;
-        FD_ZERO(&rfds);
-        FD_SET(fd, &rfds);
-        FD_SET(ufd, &rfds);
+        struct timeval timeout;
         bool exitMain = false;
         bool notifyOk = false;
         while (!notifyOk) {
-            if (select(std::max(fd, ufd) + 1, &rfds, NULL, NULL, NULL) > 0) {
+            FD_ZERO(&rfds);
+            FD_SET(fd, &rfds);
+            FD_SET(ufd, &rfds);
+            timeout.tv_sec = 1;
+            timeout.tv_usec = 0;
+            int sv = select(std::max(fd, ufd) + 1, &rfds, NULL, NULL, &timeout);
+            if (sv == 0) {
+                // Timeout
+                // Since inotify does not work in early boot check manually
+                if (ask_scan()) {
+                    // New ask file, reset
+                    PinUi::instance()->reset();
+                    notifyOk = true;
+                }
+            } else if (sv > 0) {
                 if (FD_ISSET(fd, &rfds)) {
                     // New ask file
                     // Short wait otherwise the ask file is not there yet
                     sleep(1);
-                    if (!ask_scan())
+                    if (ask_scan()) {
+                        PinUi::instance()->reset();
                         notifyOk = true;
+                    }
                 } else if (FD_ISSET(ufd, &rfds)) {
                     // Change in udev block devices
                     struct udev_device* dev = udev_monitor_receive_device(mon);
@@ -205,12 +219,21 @@ void pin(const std::string& code)
                     }
                     udev_device_unref(dev);
                 }
+            } else {
+                if (errno == EINTR) {
+                    // Interrupt signal, exit the app
+                    notifyOk = true;
+                    exitMain = true;
+                } else fprintf(stderr, "select failed with error %d\n", errno);
             }
         }
+        inotify_rm_watch(fd, askWatch);
         close(fd);
         close(ufd);
-        // App exit if udev says the device appeared
-        if (exitMain) PinUi::instance()->exit(0);
+        // App exit if needed
+        if (exitMain) {
+            PinUi::instance()->exit(0);
+        }
     }
 }
 
@@ -259,30 +282,26 @@ int ask_scan()
 
     count = scandir(ask_dir, &files, is_ask_file, alphasort);
     if (count == -1)
-        return 1;
+        return 0;
 
     if (count < 1) {
         FREE_LIST(files, count, i);
-        return 8;
+        return 0;
     }
 
     for (i = 0; i < count; i++) {
-        ask_info = ask_parse(files[i]->d_name);
-        if (!ask_info) {
-            ret = -1;
-            break;
+        if (strcmp(files[i]->d_name, s_ask)) {
+            // Not already waiting for this ask file
+            ask_info = ask_parse(files[i]->d_name);
+            if (ask_info) {
+                // Save ask file and the socket for later use
+                strcpy(s_ask, files[i]->d_name);
+                strcpy(s_socket, ask_info->socket);
+                free(ask_info);
+                ret = 1;
+                break;
+            }
         }
-
-        // Save the socket for later use
-        strcpy(s_socket, ask_info->socket);
-        // Start the UI
-        PinUi* ui = PinUi::instance();
-        ui->reset();
-        // Execute does nothing if the UI is already running
-        int rv = ui->execute(pin);
-        if (rv != -1) ret = rv;
-
-        free(ask_info);
     }
 
     FREE_LIST(files, count, i);
@@ -292,6 +311,16 @@ int ask_scan()
 
 int main(void)
 {
-    // Check ask files and start the UI if needed
-    return ask_scan();
+    int asks;
+    do {
+        asks = ask_scan();
+        if (asks) {
+            // Start the UI
+            PinUi* ui = PinUi::instance();
+            ui->reset();
+            // Execute does nothing if the UI is already running
+            ui->execute(pin);
+        }
+    } while (asks);
+    return 0;
 }

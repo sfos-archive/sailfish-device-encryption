@@ -35,7 +35,7 @@ target.path = /usr/sbin
 
 systemd.files = systemd/*
 systemd.path = /lib/systemd/system
-systemd.extra = mkdir ${INSTALL_ROOT}/lib/systemd/system/sysinit.target.wants;ln -fs ../sailfish-unlock-agent.path ${INSTALL_ROOT}/lib/systemd/system/sysinit.target.wants/
+systemd.extra = mkdir -p ${INSTALL_ROOT}/lib/systemd/system/sysinit.target.wants;ln -fs ../sailfish-unlock-agent.path ${INSTALL_ROOT}/lib/systemd/system/sysinit.target.wants/
 
 INSTALLS += \
     systemd \

@@ -3,8 +3,8 @@ Description=Sailfish Unlock Agent
 DefaultDependencies=no
 Conflicts=shutdown.target emergency.service display.service
 Before=shutdown.target display.service
+ConditionDirectoryNotEmpty=/run/systemd/ask-password
 
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/sailfish-unlock-ui
-SuccessExitStatus=0 8
