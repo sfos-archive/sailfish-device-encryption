@@ -74,6 +74,11 @@ ln -s ../dbus-%{dbusname}.service %{buildroot}/%{unitdir}/sysinit.target.wants/
 mkdir -p %{buildroot}/%{unitdir}/local-fs.target.wants/
 ln -s ../home-encryption-preparation.service \
       %{buildroot}/%{unitdir}/local-fs.target.wants/
+
+# Compatiblity and documentation files
+mkdir -p %{buildroot}/%{_sysconfdir}
+touch %{buildroot}/%{_sysconfdir}/crypttab
+chmod 600 %{buildroot}/%{_sysconfdir}/crypttab
 popd
 
 mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
@@ -91,6 +96,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 
 %files service
 %defattr(-,root,root,-)
+%ghost %{_sysconfdir}/crypttab
 %{_sbindir}/sailfish-encryption-service
 %{unitdir}/dbus-%{dbusname}.service
 %{unitdir}/sysinit.target.wants/dbus-%{dbusname}.service
