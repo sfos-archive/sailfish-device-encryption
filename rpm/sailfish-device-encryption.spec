@@ -14,7 +14,7 @@ Source0:    %{name}-%{version}.tar.bz2
 BuildRequires: qt5-qmake
 BuildRequires: qt5-qttools
 BuildRequires: qt5-qttools-linguist
-BuildRequires: sailfish-minui-devel
+BuildRequires: sailfish-minui-devel >= 0.0.6
 BuildRequires: sailfish-minui-label-tool
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(udisks2)
