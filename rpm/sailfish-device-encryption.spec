@@ -88,14 +88,14 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{unitdir}/sailfish-unlock-agent.path
 %{unitdir}/sailfish-unlock-agent.service
 %{unitdir}/sysinit.target.wants/sailfish-unlock-agent.path
-%{_sbindir}/sailfish-unlock-ui
+%{_libexecdir}/sailfish-unlock-ui
 %exclude %{_datadir}/translations/source/sailfish-unlock-ui.ts
 %{_prefix}/share/sailfish-minui/images
 
 %files service
 %defattr(-,root,root,-)
 %ghost %{_sysconfdir}/crypttab
-%{_sbindir}/sailfish-encryption-service
+%{_libexecdir}/sailfish-encryption-service
 %{unitdir}/dbus-%{dbusname}.service
 %{dbus_system_dir}/%{dbusname}.conf
 %{dbus_service_dir}/%{dbusname}.service

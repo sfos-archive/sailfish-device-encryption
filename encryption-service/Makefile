@@ -6,7 +6,7 @@ LIBS += $(shell pkg-config --libs udisks2)
 override CFLAGS += $(shell pkg-config --cflags libdbusaccess)
 LIBS += $(shell pkg-config --libs libdbusaccess)
 
-BINDIR = /usr/sbin
+BINDIR = /usr/libexec
 DATADIR = /usr/share/sailfish-device-encryption
 UNITDIR = /lib/systemd/system
 DBUSNAME = org.sailfishos.EncryptionService
