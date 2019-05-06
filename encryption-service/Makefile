@@ -3,6 +3,8 @@ override CFLAGS += $(shell pkg-config --cflags glib-2.0)
 LIBS += $(shell pkg-config --libs glib-2.0)
 override CFLAGS += $(shell pkg-config --cflags udisks2)
 LIBS += $(shell pkg-config --libs udisks2)
+override CFLAGS += $(shell pkg-config --cflags libdbusaccess)
+LIBS += $(shell pkg-config --libs libdbusaccess)
 
 BINDIR = /usr/sbin
 DATADIR = /usr/share/sailfish-device-encryption

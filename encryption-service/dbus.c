@@ -4,11 +4,14 @@
  * Copyright (c) 2019 Jolla Ltd.
  */
 
+#include <dbusaccess_peer.h>
+#include <dbusaccess_policy.h>
 #include <gio/gio.h>
 #include <glib.h>
 #include <stdio.h>
 #include "dbus.h"
 
+#define ACCESS_DENIED_ERROR "org.freedesktop.DBus.Error.AccessDenied"
 #define BUS_NAME "org.sailfishos.EncryptionService"
 #define ENCRYPTION_IFACE BUS_NAME
 #define ENCRYPTION_PATH "/org/sailfishos/EncryptionService"
@@ -16,6 +19,7 @@
 #define ENCRYPTION_METHOD "BeginEncryption"
 #define ENCRYPTION_FINISHED_SIGNAL "EncryptionFinished"
 #define FINALIZATION_METHOD "FinalizeEncryption"
+#define PRIVILEGED_ONLY_POLICY "1;user(nemo:privileged) = allow;"
 
 static const gchar introspection_xml[] =
     "<node>"
@@ -39,7 +43,11 @@ static struct {
     GDBusInterfaceVTable *encrypt_iface_vtable;
     encrypt_call_handler encrypt_method;
     finalize_call_handler finalize_method;
+    DAPolicy *policy;
+    gchar *receiver;
 } data;
+
+static gboolean is_allowed(GDBusConnection *connection, const gchar *sender);
 
 static void bus_acquired_handler(
         GDBusConnection *connection,
@@ -97,6 +105,12 @@ void method_call_handler(
     GVariantIter iter;
     gchar *passphrase;
 
+    if (!is_allowed(connection, sender)) {
+        g_dbus_method_invocation_return_dbus_error(
+                invocation, ACCESS_DENIED_ERROR, "Access denied");
+        return;
+    }
+
     // Currently doesn't check path or interface name because
     // this implements only one interface on only one path
     // and GDBus checks for them and also that parameters exist
@@ -107,6 +121,7 @@ void method_call_handler(
 
         if (data.encrypt_method(passphrase, &error)) {
             g_dbus_method_invocation_return_value(invocation, NULL);
+            data.receiver = g_strdup(sender);
         } else {
             g_dbus_method_invocation_return_gerror(invocation, error);
             g_error_free(error);
@@ -131,6 +146,9 @@ void init_dbus(
 {
     data.encrypt_method = encrypt_method;
     data.finalize_method = finalize_method;
+
+    data.policy = da_policy_new(PRIVILEGED_ONLY_POLICY);
+    data.receiver = NULL;
 
     data.info = g_dbus_node_info_new_for_xml(introspection_xml, NULL);
     g_assert(data.info != NULL);
@@ -161,15 +179,35 @@ void signal_encrypt_finished(GError *error)
     tuple = g_variant_new_tuple(parameters, 2);
 
     if (!g_dbus_connection_emit_signal(
-            data.connection, NULL,  // TODO: Could be a subscribed listener
+            data.connection, data.receiver,
             ENCRYPTION_PATH, ENCRYPTION_IFACE, ENCRYPTION_FINISHED_SIGNAL,
             tuple, &dbus_error)) {
         fprintf(stderr, "%s\n", dbus_error->message);
         g_error_free(dbus_error);
     }
 
+    g_free(data.receiver);
+    data.receiver = NULL;
+
     if (error != NULL)
         g_error_free(error);
+}
+
+static gboolean is_allowed(GDBusConnection *connection, const gchar *sender)
+{
+    DAPeer *peer;
+
+    peer = da_peer_get(DA_BUS_SYSTEM, sender);
+    if (peer == NULL)
+        return FALSE;
+
+    if (da_policy_check(
+            data.policy, &peer->cred, 0, NULL,
+            DA_ACCESS_DENY) == DA_ACCESS_DENY) {
+        return FALSE;
+    }
+
+    return TRUE;
 }
 
 // vim: expandtab:ts=4:sw=4
