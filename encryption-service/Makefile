@@ -22,7 +22,7 @@ encryption-service: dbus.o encrypt.o manage.o main.c
 install-preparation: preparation/home-encryption-preparation.service \
 		preparation/home-encryption-preparation.sh \
 		preparation/home-encryption-finish.sh
-	$(INSTALL) preparation/home-encryption-preparation.service \
+	$(INSTALL) -m0644 preparation/home-encryption-preparation.service \
 		$(DESTDIR)/$(UNITDIR)/home-encryption-preparation.service
 	$(INSTALL) preparation/home-encryption-preparation.sh \
 		$(DESTDIR)/$(DATADIR)/home-encryption-preparation.sh
@@ -30,10 +30,10 @@ install-preparation: preparation/home-encryption-preparation.service \
 		$(DESTDIR)/$(DATADIR)/home-encryption-finish.sh
 
 install-service-file: dbus-$(DBUSNAME).service
-	$(INSTALL) $< $(DESTDIR)/$(UNITDIR)/$<
+	$(INSTALL) -m0644 $< $(DESTDIR)/$(UNITDIR)/$<
 
 install-dbus-file: $(DBUSNAME).service
-	$(INSTALL) $< $(DESTDIR)/$(DBUS_SERVICE_DIR)/$<
+	$(INSTALL) -m0644 $< $(DESTDIR)/$(DBUS_SERVICE_DIR)/$<
 
 install-bus-config: $(DBUSNAME).conf
 	$(INSTALL) $< $(DESTDIR)/$(DBUS_SYSTEM_DIR)/$<
