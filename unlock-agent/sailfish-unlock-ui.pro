@@ -7,7 +7,6 @@ CONFIG += sailfish-minui-resources
 
 PKGCONFIG += \
     sailfish-minui \
-    sailfish-minui-dbus \
     libudev
 
 HEADERS += \
