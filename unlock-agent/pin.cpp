@@ -42,6 +42,7 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop) : MinUi::Window(eventLoop)
     m_key.setCancelVisible(false);
     m_key.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
     m_key.align(MinUi::Bottom, *this, MinUi::Bottom, -margin);
+    window()->disablePowerButtonSelect();
 
     m_pw.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
     m_pw.align(MinUi::Bottom, m_key, MinUi::Top, -10);
