@@ -15,12 +15,10 @@ BuildRequires: qt5-qmake
 BuildRequires: qt5-qttools
 BuildRequires: qt5-qttools-linguist
 BuildRequires: sailfish-minui-devel
-BuildRequires: sailfish-minui-dbus-devel
 BuildRequires: sailfish-minui-label-tool
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(udisks2)
 BuildRequires: pkgconfig(libudev)
-BuildRequires: mce-headers
 Requires:      %{name}-agent
 Requires:      %{name}-service
 
