@@ -9,6 +9,7 @@
 
 #define ENCRYPTION_ERROR_FAILED encryption_error_failed()
 #define ENCRYPTION_ERROR_BUSY encryption_error_busy()
+#define QUIT_TIMEOUT 5
 
 GQuark encryption_error_failed(void)
 {
@@ -49,6 +50,12 @@ static gboolean call_finalize(GError **error)
     }
 }
 
+static gboolean quit_if_idle(gpointer user_data) {
+    if (get_encryption_status() == ENCRYPTION_NOT_STARTED)
+        g_main_loop_quit(main_loop);
+    return FALSE;
+}
+
 static void status_changed_handler(encryption_state status)
 {
     GError *error = NULL;
@@ -74,6 +81,7 @@ int main(int argc, char **argv)
 
     init_encryption_service(status_changed_handler);
     init_dbus(call_encrypt, call_finalize);
+    g_timeout_add_seconds(QUIT_TIMEOUT, quit_if_idle, NULL);
     g_main_loop_run(main_loop);
 
     switch (get_encryption_status()) {

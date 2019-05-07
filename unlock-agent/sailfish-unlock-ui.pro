@@ -30,7 +30,7 @@ labels.alignment = Center
 SAILFISH_MINUI_TRANSLATIONS = \
     labels
 
-target.path = /usr/sbin
+target.path = /usr/libexec
 
 systemd.files = systemd/*
 systemd.path = /lib/systemd/system

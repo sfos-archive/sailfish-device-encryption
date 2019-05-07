@@ -16,9 +16,11 @@ BuildRequires: qt5-qttools
 BuildRequires: qt5-qttools-linguist
 BuildRequires: sailfish-minui-devel >= 0.0.6
 BuildRequires: sailfish-minui-label-tool
+BuildRequires: pkgconfig(glib-2.0)
+BuildRequires: pkgconfig(libdbusaccess)
 BuildRequires: pkgconfig(libsystemd-daemon)
-BuildRequires: pkgconfig(udisks2)
 BuildRequires: pkgconfig(libudev)
+BuildRequires: pkgconfig(udisks2)
 Requires:      %{name}-agent
 Requires:      %{name}-service
 
@@ -67,8 +69,6 @@ popd
 
 pushd encryption-service
 make DESTDIR=%{buildroot} install
-mkdir -p %{buildroot}/%{unitdir}/sysinit.target.wants/
-ln -s ../dbus-%{dbusname}.service %{buildroot}/%{unitdir}/sysinit.target.wants/
 mkdir -p %{buildroot}/%{unitdir}/local-fs.target.wants/
 ln -s ../home-encryption-preparation.service \
       %{buildroot}/%{unitdir}/local-fs.target.wants/
@@ -88,16 +88,15 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{unitdir}/sailfish-unlock-agent.path
 %{unitdir}/sailfish-unlock-agent.service
 %{unitdir}/sysinit.target.wants/sailfish-unlock-agent.path
-%{_sbindir}/sailfish-unlock-ui
+%{_libexecdir}/sailfish-unlock-ui
 %exclude %{_datadir}/translations/source/sailfish-unlock-ui.ts
 %{_prefix}/share/sailfish-minui/images
 
 %files service
 %defattr(-,root,root,-)
 %ghost %{_sysconfdir}/crypttab
-%{_sbindir}/sailfish-encryption-service
+%{_libexecdir}/sailfish-encryption-service
 %{unitdir}/dbus-%{dbusname}.service
-%{unitdir}/sysinit.target.wants/dbus-%{dbusname}.service
 %{dbus_system_dir}/%{dbusname}.conf
 %{dbus_service_dir}/%{dbusname}.service
 %{unitdir}/home-encryption-preparation.service

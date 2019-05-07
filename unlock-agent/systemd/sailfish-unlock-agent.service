@@ -7,4 +7,4 @@ ConditionDirectoryNotEmpty=/run/systemd/ask-password
 
 [Service]
 Type=oneshot
-ExecStart=/usr/sbin/sailfish-unlock-ui
+ExecStart=/usr/libexec/sailfish-unlock-ui

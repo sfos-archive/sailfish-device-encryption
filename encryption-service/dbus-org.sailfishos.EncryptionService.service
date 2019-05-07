@@ -1,7 +1,8 @@
 [Unit]
 Description=Encrypts home partition
+ConditionPathExists=/var/lib/sailfish-device-encryption/encrypt-home
 
 [Service]
 Type=dbus
 BusName=org.sailfishos.EncryptionService
-ExecStart=/usr/sbin/sailfish-encryption-service
+ExecStart=/usr/libexec/sailfish-encryption-service
