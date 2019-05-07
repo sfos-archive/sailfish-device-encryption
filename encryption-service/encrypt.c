@@ -152,7 +152,8 @@ static inline void start_format_luks(invocation_data *data)
             &subbuilder, "{sv}", "passphrase-contents",
             g_variant_new_bytestring(""));
     g_variant_builder_add(
-            &subbuilder, "{sv}", "options", g_variant_new_bytestring(""));
+            &subbuilder, "{sv}", "options",
+            g_variant_new_bytestring("tries=0"));
     g_variant_builder_add(
             &subbuilder, "{sv}", "track-parents",
             g_variant_new_boolean(TRUE));
