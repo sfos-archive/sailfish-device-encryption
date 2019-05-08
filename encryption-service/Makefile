@@ -36,7 +36,7 @@ install-dbus-file: $(DBUSNAME).service
 	$(INSTALL) -m0644 $< $(DESTDIR)/$(DBUS_SERVICE_DIR)/$<
 
 install-bus-config: $(DBUSNAME).conf
-	$(INSTALL) $< $(DESTDIR)/$(DBUS_SYSTEM_DIR)/$<
+	$(INSTALL) -m0644 $< $(DESTDIR)/$(DBUS_SYSTEM_DIR)/$<
 
 install: encryption-service \
 		install-bus-config \
