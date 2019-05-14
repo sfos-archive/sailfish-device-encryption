@@ -40,7 +40,7 @@ private:
     MinUi::PasswordField m_pw{this};
     MinUi::Keypad m_key{this};
     //% "Unlock"
-    MinUi::Label m_label{qtTrId("label-unlock-id"), this};
+    MinUi::Label m_label{qtTrId("sailfish-device-encryption-unlock-ui-la-unlock"), this};
     MinUi::EventLoop* m_eventLoop;
     MinUi::Image* m_image;
     void (*m_callback)(const std::string&);

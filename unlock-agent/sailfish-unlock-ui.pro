@@ -22,7 +22,7 @@ OTHER_FILES += \
 INCLUDEPATH += ../inih
 
 labels.ids = \
-    label-unlock-id
+    sailfish-device-encryption-unlock-ui-la-unlock
 labels.heading = true
 labels.size = Large
 labels.alignment = Center
