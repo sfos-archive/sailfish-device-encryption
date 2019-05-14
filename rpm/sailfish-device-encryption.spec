@@ -89,7 +89,6 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{unitdir}/sailfish-unlock-agent.service
 %{unitdir}/sysinit.target.wants/sailfish-unlock-agent.path
 %{_libexecdir}/sailfish-unlock-ui
-%exclude %{_datadir}/translations/source/sailfish-unlock-ui.ts
 %{_prefix}/share/sailfish-minui/images
 
 %files service
@@ -103,3 +102,13 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{unitdir}/local-fs.target.wants/home-encryption-preparation.service
 %{_datadir}/%{name}
 %dir %{_sharedstatedir}/%{name}
+
+%package unlock-ui-ts-devel
+Summary:  Translation source for Sailfish Encryption Unlock UI
+
+%description unlock-ui-ts-devel
+%{summary}.
+
+%files unlock-ui-ts-devel
+%defattr(-,root,root,-)
+%{_datadir}/translations/source/sailfish-unlock-ui.ts
