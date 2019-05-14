@@ -21,18 +21,18 @@ BuildRequires: pkgconfig(libdbusaccess)
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(libudev)
 BuildRequires: pkgconfig(udisks2)
-Requires:      %{name}-agent
+Requires:      %{name}-unlock-ui
 Requires:      %{name}-service
 
 %description
 %{summary}.
 
-%package agent
-Summary:  Sailfish Unlock
+%package unlock-ui
+Summary:  Sailfish Encryption Unlock UI
 Requires: sailfish-minui-resources
 Requires: sailfish-content-graphics-default-base
 
-%description agent
+%description unlock-ui
 Password agent to unlock encrypted partitions on device boot.
 
 %package service
@@ -83,7 +83,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 
 %files
 
-%files agent
+%files unlock-ui
 %defattr(-,root,root,-)
 %{unitdir}/sailfish-unlock-agent.path
 %{unitdir}/sailfish-unlock-agent.service

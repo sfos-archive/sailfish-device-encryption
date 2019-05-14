@@ -1,5 +1,5 @@
 [Unit]
-Description=Sailfish Unlock Agent
+Description=Sailfish Encryption Unlock UI
 DefaultDependencies=no
 Conflicts=shutdown.target emergency.service display.service
 Before=shutdown.target display.service
