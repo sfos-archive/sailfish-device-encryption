@@ -2,6 +2,7 @@
 
 #include <dirent.h>
 #include <errno.h>
+#include <glib.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +19,6 @@
 
 #include <sailfish-minui/eventloop.h>
 
-#include "ini.h"
 #include "pin.h"
 
 #define USECS(tp) (tp.tv_sec * 1000000L + tp.tv_nsec / 1000L)
@@ -39,7 +39,7 @@ typedef struct {
     int accept_cached;
     int echo;
     long not_after;
-    char id[10];
+    char id[100];
     char message[100];
 } ask_info_t;
 
@@ -89,34 +89,70 @@ int time_in_past(long time)
     return 0;
 }
 
-int handle_ini_line(void *user, const char *section, const char *name,
-        const char *value)
+static inline bool ask_info_from_g_key_file(ask_info_t *ask_info,
+                                            GKeyFile *key_file)
 {
-    ask_info_t *ask_info = (ask_info_t *)user;
+    GError *error = NULL;
+    gchar *str;
 
-    if (MATCH("Ask", "PID")) {
-        ask_info->pid = atoi(value);
-
-    } else if (MATCH("Ask", "Socket")) {
-        STRCCPY(ask_info->socket, value);
-
-    } else if (MATCH("Ask", "AcceptCached")) {
-        ask_info->accept_cached = atoi(value);
-
-    } else if (MATCH("Ask", "Echo")) {
-        ask_info->echo = atoi(value);
-
-    } else if (MATCH("Ask", "NotAfter")) {
-        ask_info->not_after = atol(value);
-
-    } else if (MATCH("Ask", "Id")) {
-        STRCCPY(ask_info->id, value);
-
-    } else if (MATCH("Ask", "Message")) {
-        STRCCPY(ask_info->message, value);
+    ask_info->pid = g_key_file_get_integer(key_file, "Ask", "PID", &error);
+    if (ask_info->pid == 0) {
+        fprintf(stderr, "Warning: Error reading PID: %s\n", error->message);
+        g_error_free(error);
     }
 
-    return 1;
+    str = g_key_file_get_string(key_file, "Ask", "Socket", &error);
+    if (str == NULL) {
+        fprintf(stderr, "Critical: Error reading Socket: %s\n",
+                error->message);
+        g_error_free(error);
+        return false;
+    }
+    STRCCPY(ask_info->socket, str);
+    g_free(str);
+
+    ask_info->accept_cached = g_key_file_get_integer(key_file, "Ask",
+                                                     "AcceptCached", &error);
+    if (ask_info->accept_cached == 0 && error != NULL) {
+        fprintf(stderr, "Warning: Error reading AcceptCached: %s\n",
+                error->message);
+        g_error_free(error);
+    }
+
+    ask_info->echo = g_key_file_get_integer(key_file, "Ask", "Echo", &error);
+    if (ask_info->echo && error != NULL) {
+        fprintf(stderr, "Warning: Error reading Echo: %s\n", error->message);
+        g_error_free(error);
+        return false;
+    }
+
+    ask_info->not_after = g_key_file_get_integer(key_file, "Ask", "NotAfter",
+                                                 &error);
+    if (ask_info->not_after && error != NULL) {
+        fprintf(stderr, "Warning: Error reading NotAfter: %s\n",
+                error->message);
+        g_error_free(error);
+    }
+
+    str = g_key_file_get_string(key_file, "Ask", "Id", &error);
+    if (str == NULL) {
+        fprintf(stderr, "Warning: Error reading Id: %s\n",
+                error->message);
+        g_error_free(error);
+    }
+    STRCCPY(ask_info->id, str);
+    g_free(str);
+
+    str = g_key_file_get_string(key_file, "Ask", "Message", &error);
+    if (str == NULL) {
+        fprintf(stderr, "Warning: Error reading Message: %s\n",
+                error->message);
+        g_error_free(error);
+    }
+    STRCCPY(ask_info->message, str);
+    g_free(str);
+
+    return true;
 }
 
 // TODO: malloc buf if password is not fixed maximum size (now 30 char)
@@ -257,15 +293,29 @@ static inline ask_info_t* ask_parse(char* ask_file)
 {
     ask_info_t* ask_info = ask_info_new(ask_file);
     if (ask_info) {
-        if (ini_parse(ask_info->ask_file, handle_ini_line,
-                      ask_info) < 0) {
+        GError *error = NULL;
+        GKeyFile *key_file = g_key_file_new();
+        if (!g_key_file_load_from_file(key_file, ask_info->ask_file,
+                                       G_KEY_FILE_NONE, &error)) {
+            fprintf(stderr, "reading ask file failed: %s\n", error->message);
+            g_error_free(error);
+            g_key_file_unref(key_file);
             free(ask_info);
             return NULL;
         }
+
+        if (!ask_info_from_g_key_file(ask_info, key_file)) {
+            g_key_file_unref(key_file);
+            free(ask_info);
+            return NULL;
+        }
+        g_key_file_unref(key_file);
+
         if (time_in_past(ask_info->not_after) == 1) {
             free(ask_info);
             return NULL;
         }
+
         if (kill(ask_info->pid, 0) == ESRCH) {
             free(ask_info);
             return NULL;
