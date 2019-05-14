@@ -27,7 +27,9 @@ static const gchar introspection_xml[] =
     "<method name=\"" ENCRYPTION_METHOD "\">"
     "<arg name=\"passphrase\" direction=\"in\" type=\"s\"></arg>"
     "</method>"
-    "<method name=\"" FINALIZATION_METHOD "\"></method>"
+    "<method name=\"" FINALIZATION_METHOD "\">"
+    "<arg name=\"temporaryEncryptionKey\" direction=\"in\" type=\"b\"></arg>"
+    "</method>"
     "<signal name=\"" ENCRYPTION_FINISHED_SIGNAL "\">"
     "<arg name=\"success\" type=\"b\" />"
     "<arg name=\"error\" type=\"s\" />"
@@ -104,6 +106,7 @@ void method_call_handler(
     GError *error = NULL;
     GVariantIter iter;
     gchar *passphrase;
+    gboolean temporary_encryption_key = FALSE;
 
     if (!is_allowed(connection, sender)) {
         g_dbus_method_invocation_return_dbus_error(
@@ -127,7 +130,10 @@ void method_call_handler(
             g_error_free(error);
         }
     } else if (strcmp(method_name, FINALIZATION_METHOD) == 0) {
-        if (data.finalize_method(&error)) {
+        g_variant_iter_init(&iter, parameters);
+        g_variant_iter_next(&iter, "b", &temporary_encryption_key);
+
+        if (data.finalize_method(temporary_encryption_key, &error)) {
             g_dbus_method_invocation_return_value(invocation, NULL);
         } else {
             g_dbus_method_invocation_return_gerror(invocation, error);

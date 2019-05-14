@@ -3,6 +3,6 @@
 #ifndef __MANAGE_H
 #define __MANAGE_H
 
-gboolean finalize(gpointer user_data);
+void finalize(GMainLoop *main_loop, gboolean temporary_encryption_key);
 
 #endif // __MANAGE_H

@@ -6,7 +6,9 @@
     <method name="BeginEncryption">
         <arg name="passphrase" direction="in" type="s"></arg>
     </method>
-    <method name="FinalizeEncryption"></method>
+    <method name="FinalizeEncryption">
+        <arg name="temporaryEncryptionKey" direction="in" type="b"></arg>
+    </method>
     <signal name="EncryptionFinished">
         <arg name="success" type="b" />
         <arg name="error" type="s" />

@@ -24,9 +24,9 @@ install-preparation: preparation/home-encryption-preparation.service \
 		preparation/home-encryption-finish.sh
 	$(INSTALL) -m0644 preparation/home-encryption-preparation.service \
 		$(DESTDIR)/$(UNITDIR)/home-encryption-preparation.service
-	$(INSTALL) preparation/home-encryption-preparation.sh \
+	$(INSTALL) -m0700 preparation/home-encryption-preparation.sh \
 		$(DESTDIR)/$(DATADIR)/home-encryption-preparation.sh
-	$(INSTALL) preparation/home-encryption-finish.sh \
+	$(INSTALL) -m0700 preparation/home-encryption-finish.sh \
 		$(DESTDIR)/$(DATADIR)/home-encryption-finish.sh
 
 install-service-file: dbus-$(DBUSNAME).service

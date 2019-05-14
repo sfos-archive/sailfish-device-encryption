@@ -35,12 +35,12 @@ static gboolean call_encrypt(gchar *passphrase, GError **error)
     return TRUE;
 }
 
-static gboolean call_finalize(GError **error)
+static gboolean call_finalize(gboolean temporary_encryption_key, GError **error)
 {
     switch (get_encryption_status()) {
         case ENCRYPTION_NOT_STARTED:
         case ENCRYPTION_FINISHED:
-            g_idle_add(finalize, main_loop);
+            finalize(main_loop, temporary_encryption_key);
             return TRUE;
         default:
             g_set_error_literal(
