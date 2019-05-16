@@ -79,14 +79,14 @@ int is_ask_file(const struct dirent *ep)
     return 1;
 }
 
-int time_in_past(long time)
+bool time_in_past(long time)
 {
     struct timespec tp;
 
     if (time > 0 && clock_gettime(CLOCK_MONOTONIC, &tp) == 0 && time < USECS(tp))
-        return 1;
+        return true;
 
-    return 0;
+    return false;
 }
 
 static inline bool ask_info_from_g_key_file(ask_info_t *ask_info,
@@ -194,7 +194,7 @@ static inline int send_password(const char *path, const char *password,
 
 void pin(const std::string& code)
 {
-    if (send_password(s_socket, code.c_str(), code.length()) < code.length()) {
+    if (send_password(s_socket, code.c_str(), code.length()) < (int)code.length()) {
         // TODO: password send failed
         fprintf(stderr, "send_password failed\n");
     }
@@ -275,18 +275,18 @@ void pin(const std::string& code)
 
 // TODO: May be rewritten to use the event loop system of minui
 // Returns 1 if dialog must be hidden, returns 0 otherwise
-int hide_dialog(void *cb_data)
+bool hide_dialog(void *cb_data)
 {
     ask_info_t *ask_info = (ask_info_t *) cb_data;
     struct stat sb;
 
-    if (time_in_past(ask_info->not_after) == 1)
-        return 1;
+    if (time_in_past(ask_info->not_after))
+        return true;
 
     if (stat(ask_info->ask_file, &sb) == -1)
-        return 1;
+        return true;
 
-    return 0;
+    return false;
 }
 
 static inline ask_info_t* ask_parse(char* ask_file)
@@ -311,7 +311,7 @@ static inline ask_info_t* ask_parse(char* ask_file)
         }
         g_key_file_unref(key_file);
 
-        if (time_in_past(ask_info->not_after) == 1) {
+        if (time_in_past(ask_info->not_after)) {
             free(ask_info);
             return NULL;
         }
