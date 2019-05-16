@@ -153,7 +153,7 @@ static inline void start_format_luks(invocation_data *data)
             g_variant_new_bytestring(""));
     g_variant_builder_add(
             &subbuilder, "{sv}", "options",
-            g_variant_new_bytestring("tries=0"));
+            g_variant_new_bytestring("tries=0,x-systemd.device-timeout=0"));
     g_variant_builder_add(
             &subbuilder, "{sv}", "track-parents",
             g_variant_new_boolean(TRUE));
@@ -170,7 +170,8 @@ static inline void start_format_luks(invocation_data *data)
             g_variant_new_bytestring(STR(FILESYSTEM_FORMAT)));
     g_variant_builder_add(
             &subbuilder, "{sv}", "opts",
-            g_variant_new_bytestring("defaults,noatime"));
+            g_variant_new_bytestring(
+                "defaults,noatime,x-systemd.device-timeout=0"));
     g_variant_builder_add(
             &subbuilder, "{sv}", "freq", g_variant_new_int32(0));
     g_variant_builder_add(
