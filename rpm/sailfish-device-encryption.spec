@@ -102,13 +102,13 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{_datadir}/%{name}
 %dir %{_sharedstatedir}/%{name}
 
-%package unlock-ui-ts-devel
+%package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI
 
-%description unlock-ui-ts-devel
+%description ts-devel
 %{summary}.
 
-%files unlock-ui-ts-devel
+%files ts-devel
 %defattr(-,root,root,-)
 %{_datadir}/translations/source/sailfish-unlock-ui.ts
 
