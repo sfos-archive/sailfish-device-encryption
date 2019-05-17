@@ -7,14 +7,17 @@ CONFIG += sailfish-minui-resources
 
 PKGCONFIG += \
     sailfish-minui \
+    sailfish-minui-dbus \
     libudev \
     glib-2.0
 
 HEADERS += \
+    compositor.h \
     pin.h
 
 SOURCES += \
     main.cpp \
+    compositor.cpp \
     pin.cpp
 
 OTHER_FILES += \
