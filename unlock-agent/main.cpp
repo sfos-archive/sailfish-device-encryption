@@ -14,11 +14,8 @@
 #include <sys/select.h>
 #include <sys/un.h>
 #include <libudev.h>
-
 #include <iostream>
-
 #include <sailfish-minui/eventloop.h>
-
 #include "pin.h"
 
 #define USECS(tp) (tp.tv_sec * 1000000L + tp.tv_nsec / 1000L)
@@ -361,17 +358,26 @@ int ask_scan()
     return ret;
 }
 
-int main(void)
+static void ask_ui(void)
 {
-    int asks;
-    do {
-        asks = ask_scan();
-        if (asks) {
-            // Start the UI
-            PinUi* ui = PinUi::instance();
-            // Execute does nothing if the UI is already running
-            ui->execute(pin);
-        }
-    } while (asks);
+    // Start the UI
+    PinUi* ui = PinUi::instance();
+    ui->reset();
+    // Execute does nothing if the UI is already running
+    ui->execute(pin);
+}
+
+int main(int argc, char **argv)
+{
+    (void)argv;
+
+    if (argc == 1) {
+        /* No arguments -> default behavior */
+        while (ask_scan())
+            ask_ui();
+    } else {
+        /* Some arguments -> UI debugging */
+        ask_ui();
+    }
     return 0;
 }

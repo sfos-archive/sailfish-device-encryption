@@ -4,7 +4,6 @@
 
 #include <sailfish-minui/eventloop.h>
 #include <sailfish-minui/ui.h>
-
 #include <iostream>
 #include <errno.h>
 #include <fcntl.h>
@@ -12,7 +11,6 @@
 #include <string.h>
 #include <syslog.h>
 #include <unistd.h>
-
 #include "pin.h"
 
 #define ACCEPT_CODE 28
