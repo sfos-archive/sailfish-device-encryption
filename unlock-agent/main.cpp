@@ -46,7 +46,19 @@ char s_socket[108] = "";
 char s_ask[108] = "";
 
 // Declarations
-int ask_scan();
+static inline ask_info_t *ask_info_new(char *ask_file);
+static int is_ask_file(const struct dirent *ep);
+static bool time_in_past(long time);
+static inline bool ask_info_from_g_key_file(ask_info_t *ask_info, GKeyFile *key_file);
+static inline int send_password(const char *path, const char *password, int len);
+static void pin(const std::string& code);
+#ifdef DEAD_CODE
+static bool hide_dialog(void *cb_data);
+#endif
+static inline ask_info_t*ask_parse(char*ask_file);
+static int ask_scan();
+static void ask_ui(void);
+int main(int ac, char **av);
 
 static inline ask_info_t * ask_info_new(char *ask_file)
 {
@@ -65,7 +77,7 @@ static inline ask_info_t * ask_info_new(char *ask_file)
     return ask_info;
 }
 
-int is_ask_file(const struct dirent *ep)
+static int is_ask_file(const struct dirent *ep)
 {
     if (ep->d_type != DT_REG)
         return 0;
@@ -76,7 +88,7 @@ int is_ask_file(const struct dirent *ep)
     return 1;
 }
 
-bool time_in_past(long time)
+static bool time_in_past(long time)
 {
     struct timespec tp;
 
@@ -191,7 +203,7 @@ static inline int send_password(const char *path, const char *password,
     return len;
 }
 
-void pin(const std::string& code)
+static void pin(const std::string& code)
 {
     if (send_password(s_socket, code.c_str(), code.length()) < (int)code.length()) {
         // TODO: password send failed
@@ -274,7 +286,8 @@ void pin(const std::string& code)
 
 // TODO: May be rewritten to use the event loop system of minui
 // Returns 1 if dialog must be hidden, returns 0 otherwise
-bool hide_dialog(void *cb_data)
+#ifdef DEAD_CODE
+static bool hide_dialog(void *cb_data)
 {
     ask_info_t *ask_info = (ask_info_t *) cb_data;
     struct stat sb;
@@ -287,6 +300,7 @@ bool hide_dialog(void *cb_data)
 
     return false;
 }
+#endif
 
 static inline ask_info_t* ask_parse(char* ask_file)
 {
@@ -323,7 +337,7 @@ static inline ask_info_t* ask_parse(char* ask_file)
     return ask_info;
 }
 
-int ask_scan()
+static int ask_scan()
 {
     ask_info_t *ask_info;
     int count, i, ret = 0;
