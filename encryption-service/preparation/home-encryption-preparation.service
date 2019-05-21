@@ -1,7 +1,7 @@
 [Unit]
 Description=Home encryption preparation service
 After=home.mount
-Before=multi-user.target
+Before=multi-user.target systemd-user-sessions.service
 ConditionPathExists=/var/lib/sailfish-device-encryption/encrypt-home
 
 [Service]
@@ -9,6 +9,3 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/bin/sh /usr/share/sailfish-device-encryption/home-encryption-preparation.sh
 ExecStop=/bin/sh /usr/share/sailfish-device-encryption/home-encryption-finish.sh
-
-[Install]
-WantedBy=local-fs.target
