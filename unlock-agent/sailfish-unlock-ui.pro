@@ -7,7 +7,8 @@ CONFIG += sailfish-minui-resources
 
 PKGCONFIG += \
     sailfish-minui \
-    libudev
+    libudev \
+    glib-2.0
 
 HEADERS += \
     pin.h
@@ -18,8 +19,6 @@ SOURCES += \
 
 OTHER_FILES += \
     rpm/sailfish-unlock-ui.spec
-
-INCLUDEPATH += ../inih
 
 labels.ids = \
     sailfish-device-encryption-unlock-ui-la-unlock
@@ -39,11 +38,3 @@ systemd.extra = mkdir -p ${INSTALL_ROOT}/lib/systemd/system/sysinit.target.wants
 INSTALLS += \
     systemd \
     target
-
-inih.target = ini.o
-inih.depends = ../inih/ini.c
-inih.commands = $(CC) -c ../inih/ini.c -o ini.o
-QMAKE_EXTRA_TARGETS += inih
-
-PRE_TARGETDEPS += ini.o
-LIBS += ini.o
