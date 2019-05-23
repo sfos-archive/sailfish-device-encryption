@@ -32,8 +32,8 @@ SAILFISH_MINUI_TRANSLATIONS = \
 target.path = /usr/libexec
 
 systemd.files = systemd/*
-systemd.path = /lib/systemd/system
-systemd.extra = mkdir -p ${INSTALL_ROOT}/lib/systemd/system/sysinit.target.wants;ln -fs ../sailfish-unlock-agent.path ${INSTALL_ROOT}/lib/systemd/system/sysinit.target.wants/
+systemd.path = /usr/lib/systemd/system
+systemd.extra = mkdir -p ${INSTALL_ROOT}/usr/lib/systemd/system/sysinit.target.wants;ln -fs ../sailfish-unlock-agent.path ${INSTALL_ROOT}/usr/lib/systemd/system/sysinit.target.wants/
 
 INSTALLS += \
     systemd \
