@@ -14,6 +14,8 @@
 #include "manage.h"
 
 #define NEMO_UID 100000
+#define TEMPORARY_KEY_FILE \
+    "/var/lib/sailfish-device-encryption/temporary-encryption-key"
 
 typedef void (*job_handler)(GDBusProxy *proxy, guint32 id, gpointer user_data);
 
@@ -234,9 +236,13 @@ static void on_signal_from_logind(
 
 static void terminate_user(manage_data *data)
 {
+    int encrypt_home;
+    GError *error = NULL;
+
     if (data->temporary_encryption_key) {
-        int encrypt_home = g_open("/var/lib/sailfish-device-encryption/temporary-encryption-key", O_TRUNC | O_CREAT |  O_WRONLY, S_IRUSR | S_IWUSR);
-        GError *error = NULL;
+        encrypt_home = g_open(
+                TEMPORARY_KEY_FILE,
+                O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
         g_close(encrypt_home, &error);
         if (error)
             g_error_free(error);
