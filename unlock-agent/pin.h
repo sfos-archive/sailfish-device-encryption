@@ -39,8 +39,8 @@ private:
     MinUi::Icon m_logo{"icon-os-state-update", this};
     MinUi::PasswordField m_pw{this};
     MinUi::Keypad m_key{this};
-    //% "Unlock"
-    MinUi::Label m_label{qtTrId("sailfish-device-encryption-unlock-ui-la-unlock"), this};
+    //% "Enter security code"
+    MinUi::Label m_label{qtTrId("sailfish-device-encryption-unlock-ui-la-enter_security_code"), this};
     MinUi::EventLoop* m_eventLoop;
     MinUi::Image* m_image;
     void (*m_callback)(const std::string&);
