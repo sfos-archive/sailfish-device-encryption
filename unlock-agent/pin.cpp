@@ -31,21 +31,28 @@ PinUi* PinUi::instance()
 
 PinUi::PinUi(MinUi::EventLoop *eventLoop) : MinUi::Window(eventLoop)
 {
-    int margin = (window()->height() / 2) - m_key.height();
+    MinUi::Theme theme;
 
-    m_logo.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_logo.align(MinUi::Top, *this, MinUi::Top, margin);
+    // Imaginary status bar vertical offset.
+    int headingVerticalOffset = theme.paddingMedium + theme.paddingSmall + theme.iconSizeExtraSmall;
 
-    m_label.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_label.align(MinUi::Top, m_logo, MinUi::Bottom, 50);
+    // Vertical alignment copied from PinInput.qml of jolla-settings-system
 
     m_key.setCancelVisible(false);
     m_key.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_key.align(MinUi::Bottom, *this, MinUi::Bottom, -margin);
+    m_key.setY(window()->height() - m_key.height() - theme.paddingLarge);
+
     window()->disablePowerButtonSelect();
 
+    // This has dependencies to the m_key
     m_pw.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_pw.align(MinUi::Bottom, m_key, MinUi::Top, -10);
+    m_pw.setY(std::min(m_key.y(), window()->height() - theme.itemSizeSmall) - m_pw.height() - (theme.itemSizeSmall / 2));
+
+    // This has dependencies to the m_key
+    m_label.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
+    m_label.setY(std::min(m_key.y() / 4 + headingVerticalOffset, m_key.y() - m_label.height() - theme.paddingMedium));
+    MinUi::Palette palette;
+    m_label.setColor(palette.pressed);
 
     m_image = NULL;
 
@@ -58,14 +65,6 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop) : MinUi::Window(eventLoop)
                     m_key.setOpacity(opacity);
                     m_label.setOpacity(opacity);
                     m_pw.setOpacity(opacity);
-                } else if (opacity > 0.0) {
-                    m_key.setOpacity(opacity);
-                    m_label.setOpacity(opacity);
-                    m_pw.setOpacity(opacity);
-                    // Image needs one event loop to show up
-                    m_image = new MinUi::Image("/usr/share/themes/sailfish-default/meegotouch/icons/graphic-shutdown-480x854.png", this);
-                    m_image->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-                    m_image->align(MinUi::Top, m_logo, MinUi::Bottom, 0);
                 } else {
                     window()->eventLoop()->cancelTimer(m_timer);
                     m_key.setOpacity(0.0);

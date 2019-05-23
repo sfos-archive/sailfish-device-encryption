@@ -36,7 +36,6 @@ private:
     PinUi(MinUi::EventLoop *eventLoop);
 
 private:
-    MinUi::Icon m_logo{"icon-os-state-update", this};
     MinUi::PasswordField m_pw{this};
     MinUi::Keypad m_key{this};
     //% "Enter security code"
