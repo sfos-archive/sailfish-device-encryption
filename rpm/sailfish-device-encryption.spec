@@ -1,6 +1,6 @@
 Name:       sailfish-device-encryption
 Summary:    Sailfish Device Encryption
-Version:    0.1.0
+Version:    0.1.14
 Release:    1
 License:    Proprietary
 URL:        https://bitbucket.org/jolla/ui-sailfish-device-encryption
@@ -14,7 +14,7 @@ Source0:    %{name}-%{version}.tar.bz2
 BuildRequires: qt5-qmake
 BuildRequires: qt5-qttools
 BuildRequires: qt5-qttools-linguist
-BuildRequires: sailfish-minui-devel >= 0.0.6
+BuildRequires: sailfish-minui-devel >= 0.0.10
 BuildRequires: sailfish-minui-label-tool
 BuildRequires: pkgconfig(glib-2.0)
 BuildRequires: pkgconfig(libdbusaccess)
