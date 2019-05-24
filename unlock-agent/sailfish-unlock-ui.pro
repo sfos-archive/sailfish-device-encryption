@@ -21,9 +21,9 @@ OTHER_FILES += \
     rpm/sailfish-unlock-ui.spec
 
 labels.ids = \
-    sailfish-device-encryption-unlock-ui-la-unlock
+    sailfish-device-encryption-unlock-ui-la-enter_security_code
 labels.heading = true
-labels.size = Large
+labels.size = ExtraLarge
 labels.alignment = Center
 
 SAILFISH_MINUI_TRANSLATIONS = \
