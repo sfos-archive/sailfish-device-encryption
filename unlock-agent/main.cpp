@@ -139,18 +139,20 @@ static inline bool ask_info_from_g_key_file(ask_info_t *ask_info,
         fprintf(stderr, "Warning: Error reading Id: %s\n",
                 error->message);
         g_error_free(error);
+    } else {
+        STRCCPY(ask_info->id, str);
+        g_free(str);
     }
-    STRCCPY(ask_info->id, str);
-    g_free(str);
 
     str = g_key_file_get_string(key_file, "Ask", "Message", &error);
     if (str == NULL) {
         fprintf(stderr, "Warning: Error reading Message: %s\n",
                 error->message);
         g_error_free(error);
+    } else {
+        STRCCPY(ask_info->message, str);
+        g_free(str);
     }
-    STRCCPY(ask_info->message, str);
-    g_free(str);
 
     return true;
 }
