@@ -30,7 +30,7 @@
     d[sizeof(d) - 1] = '\0';
 
 const char *ask_dir = "/run/systemd/ask-password/";
-const char* TEMP_DM_NAME = "temporary-cryptsetup-";
+const char* LUKS_DM_NAME = "luks-";
 
 typedef struct {
     char ask_file[108];
@@ -248,8 +248,8 @@ void pin(const std::string& code)
                         // Must be change
                         if (!strcmp(action, "change")) {
                             const char* name = udev_device_get_property_value(dev, "DM_NAME");
-                            if (name && strncmp(name, TEMP_DM_NAME, strlen(TEMP_DM_NAME))) {
-                                // DM_NAME without temp name means the unlocked device appeared
+                            if (name && !strncmp(name, LUKS_DM_NAME, strlen(LUKS_DM_NAME))) {
+                                // DM_NAME starting with "luks-" means the unlocked device appeared
                                 notifyOk = true;
                                 exitMain = true;
                             }
