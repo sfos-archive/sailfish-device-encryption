@@ -26,8 +26,15 @@ labels.heading = true
 labels.size = ExtraLarge
 labels.alignment = Center
 
+warningLabels.ids = \
+    sailfish-device-encryption-unlock-ui-la-incorrect_security_code \
+    sailfish-device-encryption-unlock-ui-la-last_chance
+warningLabels.size = Small
+warningLabels.alignment = Center
+
 SAILFISH_MINUI_TRANSLATIONS = \
-    labels
+    labels \
+    warningLabels
 
 target.path = /usr/libexec
 
