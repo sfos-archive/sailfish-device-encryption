@@ -36,8 +36,8 @@ private:
     PinUi(MinUi::EventLoop *eventLoop);
 
 private:
-    MinUi::PasswordField m_pw{this};
-    MinUi::Keypad m_key{this};
+    MinUi::PasswordField m_pw { this };
+    MinUi::Keypad m_key { this };
 
     //% "Enter security code"
     MinUi::Label m_label { qtTrId("sailfish-device-encryption-unlock-ui-la-enter_security_code"), this };
@@ -63,7 +63,6 @@ private:
     const char *m_start_call { qtTrId("sailfish-device-encryption-unlock-ui-bt-start_call") };
 
     MinUi::EventLoop* m_eventLoop;
-    MinUi::Image* m_image;
     void (*m_callback)(const std::string&);
     int m_timer;
 };

@@ -54,8 +54,6 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop) : MinUi::Window(eventLoop)
     MinUi::Palette palette;
     m_label.setColor(palette.pressed);
 
-    m_image = NULL;
-
     m_key.onKeyPress([this](int code, char character) {
         if (code == ACCEPT_CODE) {
             // Fade and exit
@@ -84,10 +82,6 @@ void PinUi::reset()
     m_label.setOpacity(1.0);
     m_pw.setOpacity(1.0);
     m_pw.setText("");
-    if (m_image) {
-        delete m_image;
-        m_image = NULL;
-    }
 }
 
 int PinUi::execute(void (*f)(const std::string&))
