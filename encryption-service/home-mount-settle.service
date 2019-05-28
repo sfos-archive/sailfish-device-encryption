@@ -1,0 +1,14 @@
+#  This file is inspired by systemd-udev-settle.conf.
+
+[Unit]
+Description=Settle before mounting home
+DefaultDependencies=no
+Wants=systemd-udevd.service
+After=systemd-udev-trigger.service
+ConditionPathIsReadWrite=/sys
+
+[Service]
+Type=oneshot
+TimeoutSec=180
+RemainAfterExit=yes
+ExecStart=/bin/udevadm settle

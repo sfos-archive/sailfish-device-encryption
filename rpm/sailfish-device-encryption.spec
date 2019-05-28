@@ -6,7 +6,8 @@ License:    Proprietary
 URL:        https://bitbucket.org/jolla/ui-sailfish-device-encryption
 Source0:    %{name}-%{version}.tar.bz2
 
-%define unitdir /lib/systemd/system/
+%define unitdir /usr/lib/systemd/system/
+%define unit_conf_dir /etc/systemd/system/
 %define dbusname org.sailfishos.EncryptionService
 %define dbus_system_dir /usr/share/dbus-1/system.d
 %define dbus_service_dir /usr/share/dbus-1/system-services
@@ -99,8 +100,17 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{dbus_service_dir}/%{dbusname}.service
 %{unitdir}/home-encryption-preparation.service
 %{unitdir}/local-fs.target.wants/home-encryption-preparation.service
+%{unitdir}/home-mount-settle.service
 %{_datadir}/%{name}
 %dir %{_sharedstatedir}/%{name}
+%ghost %dir %{unit_conf_dir}/multi-user.target.d
+%ghost %config(noreplace) %{unit_conf_dir}/multi-user.target.d/50-home.conf
+%ghost %dir %{unit_conf_dir}/systemd-user-sessions.service.d
+%ghost %config(noreplace) %{unit_conf_dir}/systemd-user-sessions.service.d/50-home.conf
+%ghost %dir %{unit_conf_dir}/home.mount.d
+%ghost %config(noreplace) %{unit_conf_dir}/home.mount.d/50-settle.conf
+%ghost %dir %{unit_conf_dir}/systemd-user-sessions.service.d
+%ghost %config(noreplace) %{unit_conf_dir}/home-mount-settle.service.d/50-sailfish-home.conf
 
 %package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI

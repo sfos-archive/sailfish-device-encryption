@@ -8,7 +8,7 @@ LIBS += $(shell pkg-config --libs libdbusaccess)
 
 BINDIR = /usr/libexec
 DATADIR = /usr/share/sailfish-device-encryption
-UNITDIR = /lib/systemd/system
+UNITDIR = /usr/lib/systemd/system
 DBUSNAME = org.sailfishos.EncryptionService
 DBUS_SYSTEM_DIR = /usr/share/dbus-1/system.d
 DBUS_SERVICE_DIR = /usr/share/dbus-1/system-services
@@ -29,6 +29,9 @@ install-preparation: preparation/home-encryption-preparation.service \
 	$(INSTALL) -m0700 preparation/home-encryption-finish.sh \
 		$(DESTDIR)/$(DATADIR)/home-encryption-finish.sh
 
+install-home-mount-settle-service: home-mount-settle.service
+	$(INSTALL) -m0644 $< $(DESTDIR)/$(UNITDIR)/$<
+
 install-service-file: dbus-$(DBUSNAME).service
 	$(INSTALL) -m0644 $< $(DESTDIR)/$(UNITDIR)/$<
 
@@ -42,6 +45,7 @@ install: encryption-service \
 		install-bus-config \
 		install-dbus-file \
 		install-service-file \
+		install-home-mount-settle-service \
 		install-preparation
 	$(INSTALL) $< $(DESTDIR)/$(BINDIR)/sailfish-encryption-service
 
