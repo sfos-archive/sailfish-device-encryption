@@ -21,7 +21,7 @@ BuildRequires: sailfish-minui-label-tool
 BuildRequires: pkgconfig(glib-2.0)
 BuildRequires: pkgconfig(libdbusaccess)
 BuildRequires: pkgconfig(libsystemd-daemon)
-BuildRequires: pkgconfig(libudev)
+BuildRequires: pkgconfig(gudev-1.0)
 BuildRequires: pkgconfig(udisks2)
 BuildRequires: pkgconfig(mce)
 Requires:      %{name}-unlock-ui

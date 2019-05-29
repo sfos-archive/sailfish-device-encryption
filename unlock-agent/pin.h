@@ -6,9 +6,13 @@
 #define UNLOCK_AGENT_PIN_H_
 #include <sailfish-minui/ui.h>
 #include <sailfish-minui/eventloop.h>
+#include <sailfish-mindbus/object.h>
+
 #include "compositor.h"
 
 namespace Sailfish {
+
+static const char *ask_dir = "/run/systemd/ask-password/";
 
 class PinUi : public MinUi::Window, public Compositor
 {
@@ -20,10 +24,10 @@ public:
 
     /**
      * Start the eventloop
-     * @param f Callback function for the pin
+     * @param socket Socket where to send the password
      * @return Eventloop exit code
      */
-    int execute(void (*f)(const std::string&));
+    int execute(const char* socket);
 
     /**
      * Exit the eventloop
@@ -52,6 +56,9 @@ private:
     void createUI();
     virtual void displayStateChanged();
     virtual void updatesEnabledChanged();
+    void sendPassword(const std::string& password);
+    void startAskWatcher();
+    static bool askWatcher(int descriptor, uint32_t events);
 
 private:
     MinUi::PasswordField *m_password;
@@ -81,13 +88,13 @@ private:
 
     MinUi::Palette m_palette;
     MinUi::Theme m_theme;
-    void (*m_callback)(const std::string&);
     int m_timer;
     bool m_canShowError;
     bool m_createdUI;
     bool m_displayOn;
     static PinUi *s_instance;
-
+    MinDBus::Object *m_dbus;
+    const char *m_socket;
 };
 }
 #endif /* UNLOCK_AGENT_PIN_H_ */
