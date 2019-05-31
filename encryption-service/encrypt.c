@@ -352,7 +352,7 @@ static inline void start_format_luks(invocation_data *data)
     g_variant_builder_add(
             &subbuilder, "{sv}", "options",
             g_variant_new_bytestring(
-                "tries=0,timeout=0,x-systemd.device-timeout=0"));
+                "nofail,tries=0,timeout=0,x-systemd.device-timeout=0"));
     g_variant_builder_add(
             &subbuilder, "{sv}", "track-parents",
             g_variant_new_boolean(TRUE));
