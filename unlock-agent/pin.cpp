@@ -5,6 +5,7 @@
 #include <sailfish-minui/eventloop.h>
 #include <sailfish-minui/ui.h>
 
+#include <iostream>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -29,59 +30,79 @@ PinUi* PinUi::instance()
     return m_instance;
 }
 
-PinUi::PinUi(MinUi::EventLoop *eventLoop) : MinUi::Window(eventLoop)
+PinUi::PinUi(MinUi::EventLoop *eventLoop)
+    : MinUi::Window(eventLoop)
+    , m_warningLabel(nullptr)
+    , m_canShowError(false)
 {
-    MinUi::Theme theme;
-
     // Imaginary status bar vertical offset.
-    int headingVerticalOffset = theme.paddingMedium + theme.paddingSmall + theme.iconSizeExtraSmall;
+    int headingVerticalOffset = m_theme.paddingMedium + m_theme.paddingSmall + m_theme.iconSizeExtraSmall;
 
     // Vertical alignment copied from PinInput.qml of jolla-settings-system
 
+    m_palette.disabled = m_palette.normal;
+
     m_key.setCancelVisible(false);
     m_key.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_key.setY(window()->height() - m_key.height() - theme.paddingLarge);
+    m_key.setY(window()->height() - m_key.height() - m_theme.paddingLarge);
+    m_key.setPalette(m_palette);
 
     window()->disablePowerButtonSelect();
 
     // This has dependencies to the m_key
     m_pw.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_pw.setY(std::min(m_key.y(), window()->height() - theme.itemSizeSmall) - m_pw.height() - (theme.itemSizeSmall / 2));
+    m_pw.setY(std::min(m_key.y(), window()->height() - m_theme.itemSizeSmall) - m_pw.height() - (m_theme.itemSizeSmall / 2));
+    m_pw.setPalette(m_palette);
 
     // This has dependencies to the m_key
     m_label.centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_label.setY(std::min(m_key.y() / 4 + headingVerticalOffset, m_key.y() - m_label.height() - theme.paddingMedium));
-    MinUi::Palette palette;
-    m_label.setColor(palette.pressed);
+    m_label.setY(std::min(m_key.y() / 4 + headingVerticalOffset, m_key.y() - m_label.height() - m_theme.paddingMedium));
+    m_label.setColor(m_palette.pressed);
 
     m_key.onKeyPress([this](int code, char character) {
         if (code == ACCEPT_CODE) {
-            // Fade and exit
-            m_timer = window()->eventLoop()->createTimer(10, [this]() {
-                double opacity = m_key.opacity() - 0.02;
-                if (opacity > 0.02) {
-                    m_key.setOpacity(opacity);
-                    m_label.setOpacity(opacity);
-                    m_pw.setOpacity(opacity);
-                } else {
-                    window()->eventLoop()->cancelTimer(m_timer);
-                    m_key.setOpacity(0.0);
-                    m_label.setOpacity(0.0);
-                    m_pw.setOpacity(0.0);
-                    // Call the callback
-                    m_callback(m_pw.text());
-                }
+            m_canShowError = true;
+            m_timer = window()->eventLoop()->createTimer(16, [this]() {
+                disableAll();
+                m_callback(m_pw.text());
+                window()->eventLoop()->cancelTimer(m_timer);
+                m_timer = 0;
             });
-        } else if (character) m_pw.setText(m_pw.text() + character);
+        } else if (character && m_timer == 0) {
+            if (m_warningLabel) {
+                reset();
+            }
+
+            m_pw.setText(m_pw.text() + character);
+        }
     });
+}
+
+MinUi::Label *PinUi::createLabel(const char *name, int y)
+{
+    MinUi::Label *label = new MinUi::Label(name, this);
+    label->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
+    label->setY(y);
+    label->setColor(m_palette.pressed);
+
+    return label;
 }
 
 void PinUi::reset()
 {
-    m_key.setOpacity(1.0);
-    m_label.setOpacity(1.0);
-    m_pw.setOpacity(1.0);
     m_pw.setText("");
+    delete m_warningLabel;
+    m_warningLabel = nullptr;
+}
+
+void PinUi::disableAll()
+{
+    setEnabled(false);
+}
+
+void PinUi::enabledAll()
+{
+    setEnabled(true);
 }
 
 int PinUi::execute(void (*f)(const std::string&))
@@ -93,4 +114,12 @@ int PinUi::execute(void (*f)(const std::string&))
 void PinUi::exit(int value)
 {
     window()->eventLoop()->exit(value);
+}
+
+void PinUi::showError()
+{
+    if (!m_warningLabel && m_canShowError) {
+        m_warningLabel = createLabel(m_incorrect_security_code, m_label.y() + m_label.height() + m_theme.paddingLarge);
+        enabledAll();
+    }
 }

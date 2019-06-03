@@ -27,13 +27,18 @@ public:
      */
     void exit(int value);
 
+    void showError();
+
+private:
+    PinUi(MinUi::EventLoop *eventLoop);
+    MinUi::Label *createLabel(const char *name, int y);
     /**
      * Reset the UI
      */
     void reset();
 
-private:
-    PinUi(MinUi::EventLoop *eventLoop);
+    void disableAll();
+    void enabledAll();
 
 private:
     MinUi::PasswordField m_pw { this };
@@ -41,6 +46,8 @@ private:
 
     //% "Enter security code"
     MinUi::Label m_label { qtTrId("sailfish-device-encryption-unlock-ui-la-enter_security_code"), this };
+
+    MinUi::Label *m_warningLabel;
 
     // Placeholder strings for error handling
 
@@ -63,6 +70,9 @@ private:
     const char *m_start_call { qtTrId("sailfish-device-encryption-unlock-ui-bt-start_call") };
 
     MinUi::EventLoop* m_eventLoop;
+    MinUi::Palette m_palette;
+    MinUi::Theme m_theme;
     void (*m_callback)(const std::string&);
     int m_timer;
+    bool m_canShowError;
 };
