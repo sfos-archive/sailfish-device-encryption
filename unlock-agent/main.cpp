@@ -18,6 +18,8 @@
 #include <sailfish-minui/eventloop.h>
 #include "pin.h"
 
+using namespace Sailfish;
+
 #define USECS(tp) (tp.tv_sec * 1000000L + tp.tv_nsec / 1000L)
 #define MATCH(s, n) (strcmp(section, s) == 0 && strcmp(name, n) == 0)
 #define FREE_LIST(l, c, i) for (i = 0; i < c; i++) free(l[i]); free(l);

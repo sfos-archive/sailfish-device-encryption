@@ -2,11 +2,15 @@
  * Copyright (C) 2019 Jolla Ltd
  */
 
+#ifndef UNLOCK_AGENT_PIN_H_
+#define UNLOCK_AGENT_PIN_H_
 #include <sailfish-minui/ui.h>
+#include <sailfish-minui/eventloop.h>
+#include "compositor.h"
 
-using namespace Sailfish;
+namespace Sailfish {
 
-class PinUi : public MinUi::Window
+class PinUi : public MinUi::Window, public Compositor
 {
 public:
     /**
@@ -31,22 +35,27 @@ public:
 
 private:
     PinUi(MinUi::EventLoop *eventLoop);
+    virtual ~PinUi();
     MinUi::Label *createLabel(const char *name, int y);
+
+public:
     /**
      * Reset the UI
      */
     void reset();
 
+private:
     void disableAll();
     void enabledAll();
 
+    void createUI();
+    virtual void displayStateChanged();
+    virtual void updatesEnabledChanged();
+
 private:
-    MinUi::PasswordField m_pw { this };
-    MinUi::Keypad m_key { this };
-
-    //% "Enter security code"
-    MinUi::Label m_label { qtTrId("sailfish-device-encryption-unlock-ui-la-enter_security_code"), this };
-
+    MinUi::PasswordField *m_pw;
+    MinUi::Keypad *m_key;
+    MinUi::Label *m_label;
     MinUi::Label *m_warningLabel;
 
     // Placeholder strings for error handling
@@ -69,10 +78,15 @@ private:
     //% "Call"
     const char *m_start_call { qtTrId("sailfish-device-encryption-unlock-ui-bt-start_call") };
 
-    MinUi::EventLoop* m_eventLoop;
     MinUi::Palette m_palette;
     MinUi::Theme m_theme;
     void (*m_callback)(const std::string&);
     int m_timer;
     bool m_canShowError;
+    bool m_createdUI;
+    bool m_displayOn;
+    static PinUi *s_instance;
+
 };
+}
+#endif /* UNLOCK_AGENT_PIN_H_ */
