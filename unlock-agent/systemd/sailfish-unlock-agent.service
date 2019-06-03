@@ -1,6 +1,8 @@
 [Unit]
 Description=Sailfish Encryption Unlock UI
 DefaultDependencies=no
+Wants=emergency-call.target
+After=emergency-call.target
 Conflicts=shutdown.target emergency.service display.service
 Before=shutdown.target display.service
 ConditionDirectoryNotEmpty=/run/systemd/ask-password
