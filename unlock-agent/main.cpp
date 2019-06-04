@@ -227,8 +227,8 @@ void pin(const std::string& code)
                 // Timeout
                 // Since inotify does not work in early boot check manually
                 if (ask_scan()) {
-                    // New ask file, reset
-                    PinUi::instance()->reset();
+                    // New ask file, show error
+                    PinUi::instance()->showError();
                     notifyOk = true;
                 }
             } else if (sv > 0) {
@@ -237,7 +237,7 @@ void pin(const std::string& code)
                     // Short wait otherwise the ask file is not there yet
                     sleep(1);
                     if (ask_scan()) {
-                        PinUi::instance()->reset();
+                        PinUi::instance()->showError();
                         notifyOk = true;
                     }
                 } else if (FD_ISSET(ufd, &rfds)) {
@@ -369,7 +369,6 @@ int main(void)
         if (asks) {
             // Start the UI
             PinUi* ui = PinUi::instance();
-            ui->reset();
             // Execute does nothing if the UI is already running
             ui->execute(pin);
         }
