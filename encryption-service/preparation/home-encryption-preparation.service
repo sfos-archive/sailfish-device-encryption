@@ -1,7 +1,7 @@
 [Unit]
 Description=Home encryption preparation service
 After=home.mount
-Before=multi-user.target systemd-user-sessions.service
+Before=multi-user.target systemd-user-sessions.service connman.service
 ConditionPathExists=/var/lib/sailfish-device-encryption/encrypt-home
 
 [Service]
