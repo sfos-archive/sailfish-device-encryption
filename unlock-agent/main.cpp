@@ -17,6 +17,7 @@
 #include <iostream>
 #include <sailfish-minui/eventloop.h>
 #include "pin.h"
+#include "touchinput.h"
 
 using namespace Sailfish;
 
@@ -366,6 +367,11 @@ int main(int argc, char **argv)
 {
     (void)argv;
 
+    const int max_wait_seconds = 15;
+
+    if (!touchinput_wait_for_device(max_wait_seconds))
+        exit(EXIT_FAILURE);
+
     if (argc == 1) {
         /* No arguments -> default behavior */
         while (ask_scan())
@@ -374,5 +380,5 @@ int main(int argc, char **argv)
         /* Some arguments -> UI debugging */
         ask_ui();
     }
-    return 0;
+    return EXIT_SUCCESS;
 }
