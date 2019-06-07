@@ -108,6 +108,7 @@ enum unit_action {
     STOP_UNIT,
     START_UNIT,
     RELOAD_UNITS,
+    ENABLE_UNIT,
 };
 
 typedef struct {
@@ -117,6 +118,7 @@ typedef struct {
 
 unit_task unit_tasks[] = {
     { RELOAD_UNITS, NULL },
+    { ENABLE_UNIT, "jolla-actdead-charging.service" },
     { START_UNIT, "home.mount" },
     { STOP_UNIT, "home-encryption-preparation.service" },
     { START_UNIT, "default.target" },
@@ -132,6 +134,8 @@ static gchar * get_unit_action(enum unit_action action)
             return "StartUnit";
         case RELOAD_UNITS:
             return "Reload";
+        case ENABLE_UNIT:
+            return "EnableUnitFiles";
         case END_OF_UNIT_TASKS:
             break;
     }
@@ -170,16 +174,17 @@ static void unit_changing_state(
         return;
     }
 
-    if (g_variant_is_of_type(job, G_VARIANT_TYPE_UNIT))
-        handle_next_unit_task(data);
-    else
+    if (g_variant_is_of_type(job, G_VARIANT_TYPE("(o)")))
         add_job_watch(data, unit_changed_state, get_job_id(job), "done");
+    else
+        handle_next_unit_task(data);
 
     g_variant_unref(job);
 }
 
 static void handle_next_unit_task(manage_data *data)
 {
+    GVariantBuilder builder;
     unit_task task = unit_tasks[data->task];
 
     switch (task.action) {
@@ -195,6 +200,15 @@ static void handle_next_unit_task(manage_data *data)
             g_dbus_proxy_call(
                     data->systemd_manager, get_unit_action(task.action),
                     NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL,
+                    unit_changing_state, data);
+            break;
+        case ENABLE_UNIT:
+            g_variant_builder_init(&builder, G_VARIANT_TYPE("as"));
+            g_variant_builder_add(&builder, "s", task.unit);
+            g_dbus_proxy_call(
+                    data->systemd_manager, get_unit_action(task.action),
+                    g_variant_new("(asbb)", &builder, FALSE, FALSE),
+                    G_DBUS_CALL_FLAGS_NONE, -1, NULL,
                     unit_changing_state, data);
             break;
         case END_OF_UNIT_TASKS:
