@@ -90,7 +90,9 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %defattr(-,root,root,-)
 %{unitdir}/sailfish-unlock-agent.path
 %{unitdir}/sailfish-unlock-agent.service
+%{unitdir}/jolla-actdead-charging.service
 %{unitdir}/sysinit.target.wants/sailfish-unlock-agent.path
+%{unitdir}/systemd-cryptsetup@.service.d
 %{_libexecdir}/sailfish-unlock-ui
 
 %files service
@@ -113,6 +115,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %ghost %config(noreplace) %{unit_conf_dir}/home.mount.d/50-settle.conf
 %ghost %dir %{unit_conf_dir}/systemd-user-sessions.service.d
 %ghost %config(noreplace) %{unit_conf_dir}/home-mount-settle.service.d/50-sailfish-home.conf
+%ghost %config(noreplace) %{unit_conf_dir}/actdead.target.wants/jolla-actdead-charging.service
 
 %package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI
