@@ -4,6 +4,7 @@
 
 #include "pin.h"
 #include "logging.h"
+#include "devicelocksettings.h"
 #include <sailfish-minui-dbus/eventloop.h>
 
 #define ACCEPT_CODE 28
@@ -77,6 +78,7 @@ void PinUi::createUI()
     m_palette.disabled = m_palette.normal;
 
     m_key->setCancelVisible(false);
+    m_key->setAcceptVisible(false);
     m_key->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
     m_key->setY(window()->height() - m_key->height() - m_theme.paddingLarge);
     m_key->setPalette(m_palette);
@@ -87,6 +89,15 @@ void PinUi::createUI()
     m_password->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
     m_password->setY(std::min(m_key->y(), window()->height() - m_theme.itemSizeSmall) - m_password->height() - (m_theme.itemSizeSmall / 2));
     m_password->setPalette(m_palette);
+    m_password->setMaximumLength(DeviceLockSettings::instance()->maximumCodeLength());
+    m_password->onTextChanged([this](MinUi::TextInput::Reason reason) {
+        if (reason == MinUi::TextInput::Deletion) {
+            if (m_warningLabel) {
+                reset();
+            }
+        }
+        updateAcceptVisibility();
+    });
 
     // This has dependencies to the m_key
     m_label->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
@@ -106,7 +117,6 @@ void PinUi::createUI()
             if (m_warningLabel) {
                 reset();
             }
-
             m_password->setText(m_password->text() + character);
         }
     });
@@ -140,6 +150,18 @@ void PinUi::disableAll()
 void PinUi::enabledAll()
 {
     setEnabled(true);
+}
+
+void PinUi::updateAcceptVisibility()
+{
+    if (!m_createdUI)
+        return;
+
+    if (m_password->text().length() < DeviceLockSettings::instance()->minimumCodeLength()) {
+        m_key->setAcceptVisible(false);
+    } else {
+        m_key->setAcceptVisible(true);
+    }
 }
 
 int PinUi::execute(void (*f)(const std::string&))

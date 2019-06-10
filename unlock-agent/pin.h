@@ -48,6 +48,7 @@ private:
     void disableAll();
     void enabledAll();
 
+    void updateAcceptVisibility();
     void createUI();
     virtual void displayStateChanged();
     virtual void updatesEnabledChanged();
