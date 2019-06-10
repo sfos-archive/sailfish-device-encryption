@@ -1,6 +1,6 @@
 Name:       sailfish-device-encryption
 Summary:    Sailfish Device Encryption
-Version:    0.1.15
+Version:    0.2.0
 Release:    1
 License:    Proprietary
 URL:        https://bitbucket.org/jolla/ui-sailfish-device-encryption
