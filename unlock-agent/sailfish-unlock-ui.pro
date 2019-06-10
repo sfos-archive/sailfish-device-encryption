@@ -1,20 +1,30 @@
 TEMPLATE = app
 TARGET = sailfish-unlock-ui
 
+QMAKE_CFLAGS += -std=c99
+# our gcc generates false positive warnings
+QMAKE_CFLAGS += -Wno-missing-field-initializers
+# as qmake does not grok CPPFLAGS, use CFLAGS
+QMAKE_CFLAGS += -D_GNU_SOURCE
+
 CONFIG -= qt
 CONFIG += link_pkgconfig
 CONFIG += sailfish-minui-resources
 
 PKGCONFIG += \
     sailfish-minui \
+    sailfish-minui-dbus \
     libudev \
     glib-2.0
 
 HEADERS += \
+    compositor.h \
     pin.h
 
 SOURCES += \
     main.cpp \
+    compositor.cpp \
+    touchinput.c \
     pin.cpp
 
 OTHER_FILES += \

@@ -14,12 +14,12 @@
 #include <sys/select.h>
 #include <sys/un.h>
 #include <libudev.h>
-
 #include <iostream>
-
 #include <sailfish-minui/eventloop.h>
-
 #include "pin.h"
+#include "touchinput.h"
+
+using namespace Sailfish;
 
 #define USECS(tp) (tp.tv_sec * 1000000L + tp.tv_nsec / 1000L)
 #define MATCH(s, n) (strcmp(section, s) == 0 && strcmp(name, n) == 0)
@@ -49,7 +49,16 @@ char s_socket[108] = "";
 char s_ask[108] = "";
 
 // Declarations
-int ask_scan();
+static inline ask_info_t *ask_info_new(char *ask_file);
+static int is_ask_file(const struct dirent *ep);
+static bool time_in_past(long time);
+static inline bool ask_info_from_g_key_file(ask_info_t *ask_info, GKeyFile *key_file);
+static inline int send_password(const char *path, const char *password, int len);
+static void pin(const std::string& code);
+static inline ask_info_t*ask_parse(char*ask_file);
+static int ask_scan();
+static void ask_ui(void);
+int main(int ac, char **av);
 
 static inline ask_info_t * ask_info_new(char *ask_file)
 {
@@ -68,7 +77,7 @@ static inline ask_info_t * ask_info_new(char *ask_file)
     return ask_info;
 }
 
-int is_ask_file(const struct dirent *ep)
+static int is_ask_file(const struct dirent *ep)
 {
     if (ep->d_type != DT_REG)
         return 0;
@@ -79,7 +88,7 @@ int is_ask_file(const struct dirent *ep)
     return 1;
 }
 
-bool time_in_past(long time)
+static bool time_in_past(long time)
 {
     struct timespec tp;
 
@@ -194,7 +203,7 @@ static inline int send_password(const char *path, const char *password,
     return len;
 }
 
-void pin(const std::string& code)
+static void pin(const std::string& code)
 {
     if (send_password(s_socket, code.c_str(), code.length()) < (int)code.length()) {
         // TODO: password send failed
@@ -275,22 +284,6 @@ void pin(const std::string& code)
     }
 }
 
-// TODO: May be rewritten to use the event loop system of minui
-// Returns 1 if dialog must be hidden, returns 0 otherwise
-bool hide_dialog(void *cb_data)
-{
-    ask_info_t *ask_info = (ask_info_t *) cb_data;
-    struct stat sb;
-
-    if (time_in_past(ask_info->not_after))
-        return true;
-
-    if (stat(ask_info->ask_file, &sb) == -1)
-        return true;
-
-    return false;
-}
-
 static inline ask_info_t* ask_parse(char* ask_file)
 {
     ask_info_t* ask_info = ask_info_new(ask_file);
@@ -326,7 +319,7 @@ static inline ask_info_t* ask_parse(char* ask_file)
     return ask_info;
 }
 
-int ask_scan()
+static int ask_scan()
 {
     ask_info_t *ask_info;
     int count, i, ret = 0;
@@ -361,17 +354,31 @@ int ask_scan()
     return ret;
 }
 
-int main(void)
+static void ask_ui(void)
 {
-    int asks;
-    do {
-        asks = ask_scan();
-        if (asks) {
-            // Start the UI
-            PinUi* ui = PinUi::instance();
-            // Execute does nothing if the UI is already running
-            ui->execute(pin);
-        }
-    } while (asks);
-    return 0;
+    // Start the UI
+    PinUi* ui = PinUi::instance();
+    ui->reset();
+    // Execute does nothing if the UI is already running
+    ui->execute(pin);
+}
+
+int main(int argc, char **argv)
+{
+    (void)argv;
+
+    const int max_wait_seconds = 15;
+
+    if (!touchinput_wait_for_device(max_wait_seconds))
+        exit(EXIT_FAILURE);
+
+    if (argc == 1) {
+        /* No arguments -> default behavior */
+        while (ask_scan())
+            ask_ui();
+    } else {
+        /* Some arguments -> UI debugging */
+        ask_ui();
+    }
+    return EXIT_SUCCESS;
 }

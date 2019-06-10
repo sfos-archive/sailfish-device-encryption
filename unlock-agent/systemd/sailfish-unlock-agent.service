@@ -1,6 +1,10 @@
 [Unit]
 Description=Sailfish Encryption Unlock UI
 DefaultDependencies=no
+Requires=dbus.socket
+After=dbus.socket
+After=mce.service
+After=dsme.service
 Wants=emergency-call.target
 After=emergency-call.target
 Conflicts=shutdown.target emergency.service display.service
