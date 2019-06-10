@@ -52,9 +52,6 @@ static bool time_in_past(long time);
 static inline bool ask_info_from_g_key_file(ask_info_t *ask_info, GKeyFile *key_file);
 static inline int send_password(const char *path, const char *password, int len);
 static void pin(const std::string& code);
-#ifdef DEAD_CODE
-static bool hide_dialog(void *cb_data);
-#endif
 static inline ask_info_t*ask_parse(char*ask_file);
 static int ask_scan();
 static void ask_ui(void);
@@ -283,24 +280,6 @@ static void pin(const std::string& code)
         }
     }
 }
-
-// TODO: May be rewritten to use the event loop system of minui
-// Returns 1 if dialog must be hidden, returns 0 otherwise
-#ifdef DEAD_CODE
-static bool hide_dialog(void *cb_data)
-{
-    ask_info_t *ask_info = (ask_info_t *) cb_data;
-    struct stat sb;
-
-    if (time_in_past(ask_info->not_after))
-        return true;
-
-    if (stat(ask_info->ask_file, &sb) == -1)
-        return true;
-
-    return false;
-}
-#endif
 
 static inline ask_info_t* ask_parse(char* ask_file)
 {
