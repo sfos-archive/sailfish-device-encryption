@@ -35,14 +35,14 @@ PinUi::~PinUi()
     delete m_key;
     m_key = nullptr;
 
-    delete m_pw;
-    m_pw = nullptr;
+    delete m_password;
+    m_password = nullptr;
 }
 
 PinUi::PinUi(MinUi::EventLoop *eventLoop)
     : MinUi::Window(eventLoop)
     , Compositor(eventLoop)
-    , m_pw(nullptr)
+    , m_password(nullptr)
     , m_key(nullptr)
     , m_label(nullptr)
     , m_warningLabel(nullptr)
@@ -64,7 +64,7 @@ void PinUi::createUI()
 
     setBlankPreventWanted(true);
 
-    m_pw = new MinUi::PasswordField(this);
+    m_password = new MinUi::PasswordField(this);
     m_key = new MinUi::Keypad(this);
     //% "Enter security code"
     m_label = new MinUi::Label(qtTrId("sailfish-device-encryption-unlock-ui-la-enter_security_code"), this);
@@ -84,9 +84,9 @@ void PinUi::createUI()
     window()->disablePowerButtonSelect();
 
     // This has dependencies to the m_key
-    m_pw->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_pw->setY(std::min(m_key->y(), window()->height() - m_theme.itemSizeSmall) - m_pw->height() - (m_theme.itemSizeSmall / 2));
-    m_pw->setPalette(m_palette);
+    m_password->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
+    m_password->setY(std::min(m_key->y(), window()->height() - m_theme.itemSizeSmall) - m_password->height() - (m_theme.itemSizeSmall / 2));
+    m_password->setPalette(m_palette);
 
     // This has dependencies to the m_key
     m_label->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
@@ -98,7 +98,7 @@ void PinUi::createUI()
             m_canShowError = true;
             m_timer = window()->eventLoop()->createTimer(16, [this]() {
                 disableAll();
-                m_callback(m_pw->text());
+                m_callback(m_password->text());
                 window()->eventLoop()->cancelTimer(m_timer);
                 m_timer = 0;
             });
@@ -107,7 +107,7 @@ void PinUi::createUI()
                 reset();
             }
 
-            m_pw->setText(m_pw->text() + character);
+            m_password->setText(m_password->text() + character);
         }
     });
 }
@@ -127,7 +127,7 @@ void PinUi::reset()
     if (!m_createdUI)
         return;
 
-    m_pw->setText("");
+    m_password->setText("");
     delete m_warningLabel;
     m_warningLabel = nullptr;
 }
