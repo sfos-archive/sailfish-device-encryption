@@ -48,12 +48,13 @@ private:
     void disableAll();
     void enabledAll();
 
+    void updateAcceptVisibility();
     void createUI();
     virtual void displayStateChanged();
     virtual void updatesEnabledChanged();
 
 private:
-    MinUi::PasswordField *m_pw;
+    MinUi::PasswordField *m_password;
     MinUi::Keypad *m_key;
     MinUi::Label *m_label;
     MinUi::Label *m_warningLabel;

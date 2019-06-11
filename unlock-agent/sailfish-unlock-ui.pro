@@ -19,11 +19,13 @@ PKGCONFIG += \
 
 HEADERS += \
     compositor.h \
+    devicelocksettings.h \
     pin.h
 
 SOURCES += \
     main.cpp \
     compositor.cpp \
+    devicelocksettings.cpp \
     touchinput.c \
     pin.cpp
 

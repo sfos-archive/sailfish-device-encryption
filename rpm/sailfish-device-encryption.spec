@@ -15,7 +15,7 @@ Source0:    %{name}-%{version}.tar.bz2
 BuildRequires: qt5-qmake
 BuildRequires: qt5-qttools
 BuildRequires: qt5-qttools-linguist
-BuildRequires: sailfish-minui-devel >= 0.0.10
+BuildRequires: sailfish-minui-devel >= 0.0.15
 BuildRequires: sailfish-minui-dbus-devel
 BuildRequires: sailfish-minui-label-tool
 BuildRequires: pkgconfig(glib-2.0)

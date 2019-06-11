@@ -18,6 +18,7 @@
 #include <sailfish-minui/eventloop.h>
 #include "pin.h"
 #include "touchinput.h"
+#include "devicelocksettings.h"
 
 using namespace Sailfish;
 
@@ -170,7 +171,7 @@ static inline bool ask_info_from_g_key_file(ask_info_t *ask_info,
 static inline int send_password(const char *path, const char *password,
                                 int len)
 {
-    char buf[32];
+    char buf[DeviceLockSettings::instance()->maximumCodeLength() + 2];
     int sd;
     struct sockaddr_un name;
 
