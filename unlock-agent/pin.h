@@ -54,6 +54,7 @@ private:
 
     void updateAcceptVisibility();
     void createUI();
+    void watchForDBusChanges();
     virtual void displayStateChanged();
     virtual void updatesEnabledChanged();
     void sendPassword(const std::string& password);
@@ -92,6 +93,7 @@ private:
     bool m_canShowError;
     bool m_createdUI;
     bool m_displayOn;
+    bool m_checkTemporaryKey;
     static PinUi *s_instance;
     MinDBus::Object *m_dbus;
     const char *m_socket;
