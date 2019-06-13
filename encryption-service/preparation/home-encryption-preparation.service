@@ -1,3 +1,5 @@
+# Copy data for dbus-org.sailfishos.EncryptionService before and after
+# encryption of /home and do some other preparations as well
 [Unit]
 Description=Home encryption preparation service
 After=home.mount

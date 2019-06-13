@@ -1,5 +1,6 @@
+# Encrypt home partition
 [Unit]
-Description=Encrypts home partition
+Description=Encrypt home partition
 ConditionPathExists=/var/lib/sailfish-device-encryption/encrypt-home
 
 [Service]
