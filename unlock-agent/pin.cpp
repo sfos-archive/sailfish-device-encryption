@@ -52,6 +52,9 @@ PinUi::~PinUi()
 
     delete m_password;
     m_password = nullptr;
+
+    delete m_busyIndicator;
+    m_busyIndicator = nullptr;
 }
 
 PinUi::PinUi(MinUi::EventLoop *eventLoop)
@@ -61,6 +64,7 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop)
     , m_key(nullptr)
     , m_label(nullptr)
     , m_warningLabel(nullptr)
+    , m_busyIndicator(nullptr)
     , m_timer(0)
     , m_canShowError(false)
     , m_createdUI(false)
@@ -120,6 +124,12 @@ void PinUi::createUI()
     m_label->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
     m_label->setY(std::min(m_key->y() / 4 + headingVerticalOffset, m_key->y() - m_label->height() - m_theme.paddingMedium));
     m_label->setColor(m_palette.pressed);
+
+
+    m_busyIndicator = new MinUi::BusyIndicator(this);
+    m_busyIndicator->setColor(m_palette.pressed);
+    m_busyIndicator->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
+    m_busyIndicator->setY(m_label->y() + m_label->height() + m_theme.paddingLarge);
 
     m_key->onKeyPress([this](int code, char character) {
         if (code == ACCEPT_CODE) {
@@ -195,11 +205,17 @@ void PinUi::reset()
 void PinUi::disableAll()
 {
     setEnabled(false);
+    if (m_busyIndicator) {
+        m_busyIndicator->setRunning(true);
+    }
 }
 
 void PinUi::enabledAll()
 {
     setEnabled(true);
+    if (m_busyIndicator) {
+        m_busyIndicator->setRunning(false);
+    }
 }
 
 void PinUi::updateAcceptVisibility()

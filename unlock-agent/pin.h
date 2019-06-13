@@ -66,6 +66,7 @@ private:
     MinUi::Keypad *m_key;
     MinUi::Label *m_label;
     MinUi::Label *m_warningLabel;
+    MinUi::BusyIndicator *m_busyIndicator;
 
     // Placeholder strings for error handling
 
