@@ -10,12 +10,18 @@
 #include <unistd.h>
 #include <sys/inotify.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <gudev/gudev.h>
 
 #define ACCEPT_CODE 28
 #define UDISKS_DBUS_NAME "org.freedesktop.UDisks2"
 #define UDISKS_UUID_PROPERTY "DM_UUID"
+#define TEMPORARY_KEY_FILE \
+    "/var/lib/sailfish-device-encryption/temporary-encryption-key"
+#define TEMPORARY_KEY "00000"
+
+static inline bool temporary_key_is_set();
 
 using namespace Sailfish;
 
@@ -59,9 +65,11 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop)
     , m_canShowError(false)
     , m_createdUI(false)
     , m_displayOn(true) // because minui unblanks screen on startup
+    , m_checkTemporaryKey(true)
     , m_dbus(nullptr)
     , m_socket(nullptr)
 {
+    watchForDBusChanges();
 }
 
 void PinUi::createUI()
@@ -117,11 +125,11 @@ void PinUi::createUI()
         if (code == ACCEPT_CODE) {
             m_canShowError = true;
             m_timer = window()->eventLoop()->createTimer(16, [this]() {
-                disableAll();
-                sendPassword(m_password->text());
-                startAskWatcher();
                 window()->eventLoop()->cancelTimer(m_timer);
                 m_timer = 0;
+                disableAll();
+                startAskWatcher();
+                sendPassword(m_password->text());
             });
         } else if (character && m_timer == 0) {
             if (m_warningLabel) {
@@ -130,7 +138,10 @@ void PinUi::createUI()
             m_password->setText(m_password->text() + character);
         }
     });
+}
 
+void PinUi::watchForDBusChanges()
+{
     // Get notified of DBus changes
     m_dbus = new MinDBus::Object(MinDBus::systemBus(), "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus");
     m_dbus->connect<const char*, const char*, const char*>("NameOwnerChanged", [](const char* name, const char*, const char*) {
@@ -206,6 +217,19 @@ void PinUi::updateAcceptVisibility()
 int PinUi::execute(const char *socket)
 {
     m_socket = socket;
+    if (m_checkTemporaryKey && temporary_key_is_set()) {
+        // Send temporary key
+        m_timer = window()->eventLoop()->createTimer(16, [this]() {
+            window()->eventLoop()->cancelTimer(m_timer);
+            m_timer = 0;
+            disableAll();
+            startAskWatcher();
+            sendPassword(TEMPORARY_KEY);
+        });
+    } else {
+        // Not using temporary key, don't check it again
+        m_checkTemporaryKey = false;
+    }
     return window()->eventLoop()->execute();
 }
 
@@ -323,13 +347,26 @@ void PinUi::startAskWatcher()
 
 bool PinUi::askWatcher(int descriptor, uint32_t events)
 {
+    (void)events;
     close(descriptor);
     PinUi *instance = PinUi::instance();
     // New file moved to the ask directory, assume password failed
-    instance->showError();
+    if (instance->m_checkTemporaryKey) {
+        // Passphrase is not temporary key, ask user for key
+        instance->m_checkTemporaryKey = false;
+        instance->enabledAll();
+    } else {
+        instance->showError();
+    }
     // Timer to exit the mainloop
     instance->m_timer = instance->eventLoop()->createTimer(100, []() {
         PinUi::instance()->exit(0);
     });
     return true;
+}
+
+static inline bool temporary_key_is_set()
+{
+    struct stat buf;
+    return stat(TEMPORARY_KEY_FILE, &buf) == 0;
 }
