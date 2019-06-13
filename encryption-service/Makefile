@@ -21,13 +21,16 @@ encryption-service: dbus.o encrypt.o manage.o main.c
 
 install-preparation: preparation/home-encryption-preparation.service \
 		preparation/home-encryption-preparation.sh \
-		preparation/home-encryption-finish.sh
+		preparation/home-encryption-finish.sh \
+		preparation/50-after-preparation.conf
 	$(INSTALL) -m0644 preparation/home-encryption-preparation.service \
 		$(DESTDIR)/$(UNITDIR)/home-encryption-preparation.service
 	$(INSTALL) -m0700 preparation/home-encryption-preparation.sh \
 		$(DESTDIR)/$(DATADIR)/home-encryption-preparation.sh
 	$(INSTALL) -m0700 preparation/home-encryption-finish.sh \
 		$(DESTDIR)/$(DATADIR)/home-encryption-finish.sh
+	$(INSTALL) -m0644 preparation/50-after-preparation.conf \
+		$(DESTDIR)/$(UNITDIR)/mount-sd@.service.d/50-after-preparation.conf
 
 install-home-mount-settle-service: home-mount-settle.service
 	$(INSTALL) -m0644 $< $(DESTDIR)/$(UNITDIR)/$<
