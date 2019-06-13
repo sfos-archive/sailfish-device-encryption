@@ -7,7 +7,15 @@
 #include "devicelocksettings.h"
 #include <sailfish-minui-dbus/eventloop.h>
 
+#include <unistd.h>
+#include <sys/inotify.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <gudev/gudev.h>
+
 #define ACCEPT_CODE 28
+#define UDISKS_DBUS_NAME "org.freedesktop.UDisks2"
+#define UDISKS_UUID_PROPERTY "DM_UUID"
 
 using namespace Sailfish;
 
@@ -47,11 +55,12 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop)
     , m_key(nullptr)
     , m_label(nullptr)
     , m_warningLabel(nullptr)
-    , m_callback(nullptr)
     , m_timer(0)
     , m_canShowError(false)
     , m_createdUI(false)
     , m_displayOn(true) // because minui unblanks screen on startup
+    , m_dbus(nullptr)
+    , m_socket(nullptr)
 {
 }
 
@@ -109,7 +118,8 @@ void PinUi::createUI()
             m_canShowError = true;
             m_timer = window()->eventLoop()->createTimer(16, [this]() {
                 disableAll();
-                m_callback(m_password->text());
+                sendPassword(m_password->text());
+                startAskWatcher();
                 window()->eventLoop()->cancelTimer(m_timer);
                 m_timer = 0;
             });
@@ -118,6 +128,35 @@ void PinUi::createUI()
                 reset();
             }
             m_password->setText(m_password->text() + character);
+        }
+    });
+
+    // Get notified of DBus changes
+    m_dbus = new MinDBus::Object(MinDBus::systemBus(), "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus");
+    m_dbus->connect<const char*, const char*, const char*>("NameOwnerChanged", [](const char* name, const char*, const char*) {
+        if (!strcmp(name, UDISKS_DBUS_NAME)) {
+            // UDisks2 change, check block devices
+            const gchar* subsystems[] = {"block", NULL};
+            GUdevClient* client = g_udev_client_new(subsystems);
+            if (client) {
+                bool cryptFound = false;
+                GList* devices = g_udev_client_query_by_subsystem (client, subsystems[0]);
+                for (GList* list = devices; list != NULL; list = list->next) {
+                    GUdevDevice* device = (GUdevDevice*) list->data;
+                    if (g_udev_device_has_property(device, UDISKS_UUID_PROPERTY)) {
+                        if (!strncmp(g_udev_device_get_property(device, UDISKS_UUID_PROPERTY), "CRYPT-", 6)) {
+                            // Crypted device, assume password ok
+                            cryptFound = true;
+                            break;
+                        }
+                    }
+                }
+                g_list_free_full(devices, g_object_unref);
+                g_object_unref(client);
+                if (cryptFound) {
+                    PinUi::instance()->exit(0);
+                }
+            }
         }
     });
 }
@@ -164,15 +203,19 @@ void PinUi::updateAcceptVisibility()
     }
 }
 
-int PinUi::execute(void (*f)(const std::string&))
+int PinUi::execute(const char *socket)
 {
-    m_callback = f;
+    m_socket = socket;
     return window()->eventLoop()->execute();
 }
 
 void PinUi::exit(int value)
 {
-    window()->eventLoop()->exit(value);
+    if (m_timer) {
+        eventLoop()->cancelTimer(m_timer);
+        m_timer = 0;
+    }
+    eventLoop()->exit(value);
 }
 
 void PinUi::showError()
@@ -180,6 +223,7 @@ void PinUi::showError()
     if (!m_createdUI)
         return;
 
+    reset();
     if (!m_warningLabel && m_canShowError) {
         m_warningLabel = createLabel(m_incorrect_security_code, m_label->y() + m_label->height() + m_theme.paddingLarge);
         enabledAll();
@@ -218,4 +262,74 @@ void PinUi::updatesEnabledChanged()
         window()->setVisible(true);
         createUI();
     }
+}
+
+void PinUi::sendPassword(const std::string& password)
+{
+    char buf[DeviceLockSettings::instance()->maximumCodeLength() + 2];
+    int sd, len;
+    struct sockaddr_un name;
+
+    if (password.length() > 0) {
+        buf[0] = '+';
+        strncpy(buf + 1, password.c_str(), sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        len = strlen(buf);
+    } else {  // Assume cancelled
+        buf[0] = '-';
+        len = 1;
+    }
+
+    if ((sd = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) {
+        log_err("socket open failed");
+        return;
+    }
+
+    name.sun_family = AF_UNIX;
+    strncpy(name.sun_path, m_socket, sizeof(name.sun_path));
+    name.sun_path[sizeof(name.sun_path) - 1] = '\0';
+
+    if (connect(sd, (struct sockaddr *)&name, SUN_LEN(&name)) != 0) {
+        log_err("socket connect failed");
+        close(sd);
+        return;
+    }
+
+    if (send(sd, buf, len, 0) < len) {
+        log_err("socket send failed");
+        close(sd);
+        return;
+    }
+
+    close(sd);
+}
+
+void PinUi::startAskWatcher()
+{
+    int fd = inotify_init1(IN_NONBLOCK);
+    if (fd < 0) {
+        log_err("inotify init failed");
+        return;
+    }
+    int askWatch = inotify_add_watch(fd, ask_dir, IN_MOVED_TO);
+    if (askWatch < 0) {
+        log_err("inotify watch add failed");
+        return;
+    }
+
+    std::function<NotifierCallbackType> callback(askWatcher);
+    eventLoop()->addNotifierCallback(fd, callback);
+}
+
+bool PinUi::askWatcher(int descriptor, uint32_t events)
+{
+    close(descriptor);
+    PinUi *instance = PinUi::instance();
+    // New file moved to the ask directory, assume password failed
+    instance->showError();
+    // Timer to exit the mainloop
+    instance->m_timer = instance->eventLoop()->createTimer(100, []() {
+        PinUi::instance()->exit(0);
+    });
+    return true;
 }
