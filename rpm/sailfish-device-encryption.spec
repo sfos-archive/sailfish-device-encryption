@@ -105,6 +105,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{dbus_service_dir}/%{dbusname}.service
 %{unitdir}/home-encryption-preparation.service
 %{unitdir}/local-fs.target.wants/home-encryption-preparation.service
+%{unitdir}/mount-sd@.service.d/50-after-preparation.conf
 %{unitdir}/home-mount-settle.service
 %{_datadir}/%{name}
 %dir %{_sharedstatedir}/%{name}
