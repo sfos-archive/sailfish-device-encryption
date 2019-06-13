@@ -265,7 +265,8 @@ void PinUi::showError()
 
     reset();
     if (!m_warningLabel && m_canShowError) {
-        m_warningLabel = createLabel(m_incorrect_security_code, m_label->y() + m_label->height() + m_theme.paddingLarge);
+        //% "Incorrect security code"
+        m_warningLabel = createLabel(qtTrId("sailfish-device-encryption-unlock-ui-la-incorrect_security_code"), m_label->y() + m_label->height() + m_theme.paddingLarge);
         enabledAll();
     }
 }
