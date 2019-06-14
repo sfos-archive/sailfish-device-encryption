@@ -9,6 +9,8 @@
 
 namespace Sailfish {
 
+struct UnitProps;
+
 class Compositor
 {
 public:
@@ -38,6 +40,10 @@ public:
 
     void setBlankPreventWanted(bool wanted);
 
+    bool evaluateNameReplacement();
+    bool compositorOwned() const;
+    bool targetUnitActive() const;
+
 private:
     typedef DBusMessage *(Compositor::*HandlerCallback)(DBusMessage *msg);
 
@@ -51,6 +57,7 @@ private:
         const char *arg0;
         const char *arg1;
         const char *arg2;
+        bool        implicit;
     };
 
     void updateMceAvailable(bool available);
@@ -75,17 +82,33 @@ private:
     void updateUpdatesEnabled(bool state);
     DBusMessage *updatesEnabledHandler(DBusMessage *msg);
 
+    void updateCompositorOwned(bool owned);
+    DBusMessage *nameLostHandler(DBusMessage *msg);
+    DBusMessage *nameAcquiredHandler(DBusMessage *msg);
+
     static DBusHandlerResult systemBusFilter(DBusConnection *con, DBusMessage *msg, void *aptr);
     bool generateMatch(Compositor::Handler &handler, char *buff, size_t size);
     void addSystemBusMatches();
     void removeSystemBusMatches();
-    void connectToSystemBus();
+    void subscribeSystemdNotifications() const;
+    bool acquireName();
+    bool connectToSystemBus();
     void disconnectFromSystemBus();
+
+    void updateTargetUnitActive(bool active);
+    void evaluateTargetUnitActive();
+    DBusMessage *targetUnitPropsHandler(DBusMessage *msg);
+    static void targetUnitPropsReply(DBusPendingCall *pc, void *aptr);
+    void targetUnitPropsQuery();
 
 private:
     DBusConnection *m_systemBus;
     DisplayState    m_displayState;
     int             m_updatesEnabled;
+    bool            m_compositorOwned;
+    bool            m_replacementAllowed;
+    bool            m_targetUnitActive;
+    UnitProps      *m_targetUnitProps;
 
     bool            m_mceAvailable;
     char           *m_mceNameOwner;
