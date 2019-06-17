@@ -92,7 +92,7 @@ void PinUi::createUI()
     m_label = new MinUi::Label(qtTrId("sailfish-device-encryption-unlock-ui-la-enter_security_code"), this);
 
     // Imaginary status bar vertical offset.
-    int headingVerticalOffset = m_theme.paddingMedium + m_theme.paddingSmall + m_theme.iconSizeExtraSmall;
+    int headingVerticalOffset = MinUi::theme.paddingMedium + MinUi::theme.paddingSmall + MinUi::theme.iconSizeExtraSmall;
 
     // Vertical alignment copied from PinInput.qml of jolla-settings-system
 
@@ -101,14 +101,14 @@ void PinUi::createUI()
     m_key->setCancelVisible(false);
     m_key->setAcceptVisible(false);
     m_key->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_key->setY(window()->height() - m_key->height() - m_theme.paddingLarge);
+    m_key->setY(window()->height() - m_key->height() - MinUi::theme.paddingLarge);
     m_key->setPalette(m_palette);
 
     window()->disablePowerButtonSelect();
 
     // This has dependencies to the m_key
     m_password->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_password->setY(std::min(m_key->y(), window()->height() - m_theme.itemSizeSmall) - m_password->height() - (m_theme.itemSizeSmall / 2));
+    m_password->setY(std::min(m_key->y(), window()->height() - MinUi::theme.itemSizeSmall) - m_password->height() - (MinUi::theme.itemSizeSmall / 2));
     m_password->setPalette(m_palette);
     m_password->setMaximumLength(DeviceLockSettings::instance()->maximumCodeLength());
     m_password->onTextChanged([this](MinUi::TextInput::Reason reason) {
@@ -122,14 +122,14 @@ void PinUi::createUI()
 
     // This has dependencies to the m_key
     m_label->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_label->setY(std::min(m_key->y() / 4 + headingVerticalOffset, m_key->y() - m_label->height() - m_theme.paddingMedium));
+    m_label->setY(std::min(m_key->y() / 4 + headingVerticalOffset, m_key->y() - m_label->height() - MinUi::theme.paddingMedium));
     m_label->setColor(m_palette.pressed);
 
 
     m_busyIndicator = new MinUi::BusyIndicator(this);
     m_busyIndicator->setColor(m_palette.pressed);
     m_busyIndicator->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_busyIndicator->setY(m_label->y() + m_label->height() + m_theme.paddingLarge);
+    m_busyIndicator->setY(m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
 
     m_key->onKeyPress([this](int code, char character) {
         if (code == ACCEPT_CODE) {
@@ -266,7 +266,7 @@ void PinUi::showError()
     reset();
     if (!m_warningLabel && m_canShowError) {
         //% "Incorrect security code"
-        m_warningLabel = createLabel(qtTrId("sailfish-device-encryption-unlock-ui-la-incorrect_security_code"), m_label->y() + m_label->height() + m_theme.paddingLarge);
+        m_warningLabel = createLabel(qtTrId("sailfish-device-encryption-unlock-ui-la-incorrect_security_code"), m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
         enabledAll();
     }
 }

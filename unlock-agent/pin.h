@@ -86,7 +86,6 @@ private:
     const char *m_start_call { qtTrId("sailfish-device-encryption-unlock-ui-bt-start_call") };
 
     MinUi::Palette m_palette;
-    MinUi::Theme m_theme;
     int m_timer;
     bool m_canShowError;
     bool m_createdUI;
