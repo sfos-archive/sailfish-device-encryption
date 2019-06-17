@@ -107,8 +107,12 @@ void PinUi::createUI()
     window()->disablePowerButtonSelect();
 
     // This has dependencies to the m_key
-    m_password->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
     m_password->setY(std::min(m_key->y(), window()->height() - MinUi::theme.itemSizeSmall) - m_password->height() - (MinUi::theme.itemSizeSmall / 2));
+
+    // Screen width - we have approximately 2 keys sizes visible as digits are centered - paddings on the edges.
+    int margin = (width() - (MinUi::theme.itemSizeHuge * 2.0) - (2 * MinUi::theme.paddingLarge)) / 2;
+    m_password->setBold(true);
+    m_password->horizontalFill(*this, margin);
     m_password->setPalette(m_palette);
     m_password->setMaximumLength(DeviceLockSettings::instance()->maximumCodeLength());
     m_password->onTextChanged([this](MinUi::TextInput::Reason reason) {
