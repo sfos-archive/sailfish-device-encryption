@@ -230,7 +230,7 @@ int main(int argc, char **argv)
 {
     (void)argv;
 
-    const int max_wait_seconds = 15;
+    const int max_wait_seconds = 600;
 
     if (!touchinput_wait_for_device(max_wait_seconds))
         exit(EXIT_FAILURE);
