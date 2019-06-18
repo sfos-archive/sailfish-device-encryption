@@ -365,8 +365,8 @@ void PinUi::startAskWatcher()
 bool PinUi::askWatcher(int descriptor, uint32_t events)
 {
     (void)events;
-    close(descriptor);
     PinUi *instance = PinUi::instance();
+    instance->eventLoop()->removeNotifier(descriptor);
     // New file moved to the ask directory, assume password failed
     if (instance->m_checkTemporaryKey) {
         // Passphrase is not temporary key, ask user for key
