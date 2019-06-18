@@ -66,11 +66,9 @@ private:
     MinUi::Keypad *m_key;
     MinUi::Label *m_label;
     MinUi::Label *m_warningLabel;
+    MinUi::BusyIndicator *m_busyIndicator;
 
     // Placeholder strings for error handling
-
-    //% "Incorrect security code"
-    const char *m_incorrect_security_code { qtTrId("sailfish-device-encryption-unlock-ui-la-incorrect_security_code") };
 
     //% "Entering an incorrect security code once more will permanently block your access to the device."
     const char *m_last_chance { qtTrId("sailfish-device-encryption-unlock-ui-la-last_chance") };
