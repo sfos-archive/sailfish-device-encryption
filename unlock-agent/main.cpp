@@ -13,8 +13,12 @@
 #include "pin.h"
 #include "touchinput.h"
 #include "devicelocksettings.h"
+#include "logging.h"
+#include <dbus/dbus.h>
 
 using namespace Sailfish;
+
+#define LIPSTICK_SERVICE "org.nemomobile.lipstick"
 
 #define USECS(tp) (tp.tv_sec * 1000000L + tp.tv_nsec / 1000L)
 #define MATCH(s, n) (strcmp(section, s) == 0 && strcmp(name, n) == 0)
@@ -191,7 +195,9 @@ static inline ask_info_t* ask_parse(char* ask_file)
 static int ask_scan()
 {
     ask_info_t *ask_info;
-    int count, i, ret = 0;
+    int count;
+    int i;
+    int ret = 0;
     struct dirent **files;
 
     count = scandir(ask_dir, &files, is_ask_file, alphasort);
@@ -226,11 +232,41 @@ static void ask_ui(void)
     ui->execute(s_socket);
 }
 
+static bool ask_can_be_started()
+{
+    bool ack = false;
+    DBusError err = DBUS_ERROR_INIT;
+    DBusConnection *m_systemBus = nullptr;
+    if (!(m_systemBus = dbus_bus_get(DBUS_BUS_SYSTEM, &err))) {
+        log_err("system bus connect failed: " << err.name << ": " <<  err.message);
+    } else {
+        if (dbus_bus_name_has_owner(m_systemBus, LIPSTICK_SERVICE, &err)) {
+            log_err("lipstick is running, unlock-agent ought not to be");
+        } else if (dbus_error_is_set(&err) && strcmp(err.name, DBUS_ERROR_NAME_HAS_NO_OWNER)) {
+            log_err("failed to query lipstick availability: " << err.name << ": " << err.message);
+        } else {
+            ack = true;
+        }
+        dbus_connection_unref(m_systemBus);
+    }
+    return ack;
+}
+
 int main(int argc, char **argv)
 {
     (void)argv;
 
     const int max_wait_seconds = 600;
+
+    /* FIXME: Ensure that we do not get false positive systemd triggers.
+     *
+     * Meanwhile: Check that triggers we do get are something we ought
+     * to handle in the context of unlock-agent i.e. lipstick has not
+     * been started yet. Return success so that systemd does not need
+     * to consider restarting the oneshot.
+     */
+    if (!ask_can_be_started())
+        exit(EXIT_SUCCESS);
 
     if (!touchinput_wait_for_device(max_wait_seconds))
         exit(EXIT_FAILURE);
