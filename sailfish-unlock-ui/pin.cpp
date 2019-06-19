@@ -15,6 +15,7 @@
 #include <sys/un.h>
 
 #define ACCEPT_CODE 28
+#define CANCEL_CODE 1
 #define UDISKS_DBUS_NAME "org.freedesktop.UDisks2"
 #define UDISKS_UUID_PROPERTY "DM_UUID"
 #define TEMPORARY_KEY_FILE \
@@ -24,6 +25,11 @@
 static inline bool temporary_key_is_set();
 
 using namespace Sailfish;
+
+static const MinUi::Color color_red(255, 0, 0, 255);
+static const MinUi::Color color_lightred(200, 0, 0, 255);
+static const MinUi::Color color_reddish(76, 0, 0, 255);
+static const MinUi::Color color_white(255, 255, 255, 255);
 
 PinUi* PinUi::s_instance = nullptr;
 
@@ -55,6 +61,18 @@ PinUi::~PinUi()
 
     delete m_busyIndicator;
     m_busyIndicator = nullptr;
+
+    delete m_emergencyButton;
+    m_emergencyButton = nullptr;
+
+    delete m_emergencyBackground;
+    m_emergencyBackground = nullptr;
+
+    delete m_emergencyLabel;
+    m_emergencyLabel = nullptr;
+
+    delete m_speakerButton;
+    m_speakerButton = nullptr;
 }
 
 PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
@@ -73,7 +91,11 @@ PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
     , m_dbus(nullptr)
     , m_socket(nullptr)
     , m_watcher(false)
+    , m_emergencyButton(nullptr)
+    , m_emergencyBackground(nullptr)
+    , m_emergencyLabel(nullptr)
     , m_call(Call(eventLoop))
+    , m_speakerButton(nullptr)
 {
 }
 
@@ -87,6 +109,16 @@ void PinUi::createUI()
 
     setBlankPreventWanted(true);
 
+    // Emergency mode rectangle
+    m_emergencyBackground = new MinUi::Rectangle(this);
+    m_emergencyBackground->setVisible(false);
+    m_emergencyBackground->setEnabled(false);
+    m_emergencyBackground->setX(0);
+    m_emergencyBackground->setY(0);
+    m_emergencyBackground->setWidth(width());
+    m_emergencyBackground->setHeight(height());
+    m_emergencyBackground->setColor(color_reddish);
+
     m_password = new MinUi::PasswordField(this);
     m_key = new MinUi::Keypad(this);
     //% "Enter security code"
@@ -98,6 +130,7 @@ void PinUi::createUI()
     // Vertical alignment copied from PinInput.qml of jolla-settings-system
 
     m_palette.disabled = m_palette.normal;
+    m_palette.selected = m_palette.normal;
 
     m_key->setCancelVisible(false);
     m_key->setAcceptVisible(false);
@@ -135,16 +168,49 @@ void PinUi::createUI()
     m_busyIndicator->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
     m_busyIndicator->setY(m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
 
+    m_emergencyButton = new MinUi::IconButton("icon-lockscreen-emergency-call", this);
+    m_emergencyButton->setX(m_label->x());
+    m_emergencyButton->setY(m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
+    MinUi::Palette palette;
+    palette.normal = color_lightred;
+    palette.selected = color_lightred;
+    m_emergencyButton->setPalette(palette);
+    m_emergencyButton->onActivated([this]() {
+        setEmergencyMode(!m_emergencyMode);
+    });
+
     m_key->onKeyPress([this](int code, char character) {
         if (code == ACCEPT_CODE) {
-            m_canShowError = true;
-            m_timer = window()->eventLoop()->createTimer(16, [this]() {
-                window()->eventLoop()->cancelTimer(m_timer);
-                m_timer = 0;
-                disableAll();
-                startAskWatcher();
-                sendPassword(m_password->text());
-            });
+            if (m_emergencyMode) {
+                if (m_call.calling()) {
+                        // End the ongoing call
+                        m_call.endCall();
+                } else {
+                    // Make the call
+                    std::string number = m_password->text();
+                    m_call.makeCall(number, [this](Call::Status status) {
+                        setEmergencyCallStatus(status);
+                    });
+                }
+            } else {
+                // Send the password
+                m_canShowError = true;
+                m_timer = window()->eventLoop()->createTimer(16, [this]() {
+                    window()->eventLoop()->cancelTimer(m_timer);
+                    m_timer = 0;
+                    disableAll();
+                    startAskWatcher();
+                    sendPassword(m_password->text());
+                });
+            }
+        } else if (code == CANCEL_CODE) {
+            if (m_call.calling()) {
+                // End the ongoing call
+                m_call.endCall();
+            } else {
+                // Cancel pressed, get out of the emergency call mode
+                setEmergencyMode(false);
+            }
         } else if (character && m_timer == 0) {
             if (m_warningLabel) {
                 reset();
@@ -152,6 +218,87 @@ void PinUi::createUI()
             m_password->setText(m_password->text() + character);
         }
     });
+}
+
+void PinUi::setEmergencyMode(bool emergency)
+{
+    m_password->setText("");
+    if (emergency) {
+        m_emergencyBackground->setVisible(true);
+        m_label->setVisible(false);
+
+        if (!m_emergencyLabel) {
+            //% "Emergency call"
+            m_emergencyLabel = new MinUi::Label(qtTrId("sailfish-device-encryption-unlock-ui-la-emergency_call"), this);
+            m_emergencyLabel->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
+            m_emergencyLabel->setY(m_label->y());
+            m_emergencyLabel->setColor(color_red);
+        } else {
+            m_emergencyLabel->setVisible(true);
+        }
+
+        MinUi::Palette palette;
+        palette.normal = color_red;
+        palette.selected = color_red;
+        palette.disabled = color_red;
+        palette.pressed = color_white;
+
+        m_password->setPalette(palette);
+        m_password->setEchoDelay(-1); // Disable number masking
+
+        m_key->setAcceptVisible(false);
+        m_key->setCancelVisible(true);
+        m_key->setPalette(palette);
+        m_key->setAcceptText(m_start_call);
+
+        m_emergencyButton->setVisible(false);
+
+        if (!m_speakerButton) {
+            m_speakerButton = new MinUi::IconButton("icon-m-speaker", this);
+            m_speakerButton->centerBetween(*this, MinUi::Left, *this, MinUi::Right);;
+            m_speakerButton->setY(m_label->y() + m_label->height() + m_speakerButton->height() + MinUi::theme.paddingLarge);
+            m_speakerButton->setPalette(palette);
+
+            m_speakerButton->onActivated([this]() {
+                m_call.toggleSpeaker();
+                MinUi::Palette palette = m_speakerButton->palette();
+                if (m_call.speakerEnabled()) {
+                    palette.normal = color_white;
+                    palette.selected = color_white;
+                    palette.pressed = color_red;
+                } else {
+                    palette.normal = color_red;
+                    palette.selected = color_red;
+                    palette.pressed = color_white;
+                }
+                m_speakerButton->setPalette(palette);
+            });
+        } else {
+            m_speakerButton->setVisible(true);
+        }
+
+        m_emergencyMode = true;
+    } else {
+        m_emergencyBackground->setVisible(false);
+        m_emergencyLabel->setVisible(false);
+        m_label->setVisible(true);
+        m_key->setAcceptVisible(false);
+        m_key->setCancelVisible(false);
+        MinUi::Palette palette;
+        m_password->setPalette(m_palette);
+        m_password->setEchoDelay(100); // Default number masking
+        m_key->setPalette(m_palette);
+        m_key->setAcceptText(nullptr);
+        m_key->setAcceptVisible(false);
+        m_emergencyButton->setVisible(true);
+        m_speakerButton->setVisible(false);
+        if (m_warningLabel) {
+            delete m_warningLabel;
+            m_warningLabel = nullptr;
+        }
+
+        m_emergencyMode = false;
+    }
 }
 
 MinUi::Label *PinUi::createLabel(const char *name, int y)
@@ -192,7 +339,7 @@ void PinUi::enabledAll()
 
 void PinUi::updateAcceptVisibility()
 {
-    if (!m_createdUI)
+    if (!m_createdUI || m_emergencyMode)
         return;
 
     if (m_password->text().length() < DeviceLockSettings::instance()->minimumCodeLength()) {
@@ -343,7 +490,7 @@ bool PinUi::askWatcher(int descriptor, uint32_t events)
     (void)events;
 
     // Flush inotify events
-    unsigned int available;
+    int available;
     if (!ioctl(descriptor, FIONREAD, &available)) {
         char buf[available];
         if (read(descriptor, buf, available) == -1) {
@@ -365,6 +512,35 @@ bool PinUi::askWatcher(int descriptor, uint32_t events)
         PinUi::instance()->exit(0);
     });
     return true;
+}
+
+void PinUi::setEmergencyCallStatus(Call::Status status)
+{
+    if (m_warningLabel) {
+        delete m_warningLabel;
+        m_warningLabel = nullptr;
+    }
+    switch (status) {
+        case Call::Status::Calling:
+            m_warningLabel = createLabel(m_calling_emergency, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
+            m_key->setAcceptText(m_end_call);
+            break;
+        case Call::Status::Error:
+            m_warningLabel = createLabel(m_emergency_call_failed, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
+            m_key->setAcceptText(m_start_call);
+            break;
+        case Call::Status::InvalidNumber:
+            m_warningLabel = createLabel(m_invalid_emergency_number, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
+            break;
+        case Call::Status::Ended:
+            m_warningLabel = createLabel(m_emergency_call_ended, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
+            m_key->setAcceptText(m_start_call);
+            break;
+        default:
+            break;
+    }
+    if (m_warningLabel)
+        m_warningLabel->setColor(color_white);
 }
 
 static inline bool temporary_key_is_set()
