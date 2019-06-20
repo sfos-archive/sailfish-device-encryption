@@ -94,6 +94,7 @@ private:
     static PinUi *s_instance;
     MinDBus::Object *m_dbus;
     const char *m_socket;
+    bool m_watcher;
 };
 }
 #endif /* UNLOCK_AGENT_PIN_H_ */
