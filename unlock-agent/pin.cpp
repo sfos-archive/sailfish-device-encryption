@@ -72,6 +72,7 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop)
     , m_checkTemporaryKey(true)
     , m_dbus(nullptr)
     , m_socket(nullptr)
+    , m_watcher(false)
 {
     watchForDBusChanges();
 }
@@ -351,26 +352,37 @@ void PinUi::sendPassword(const std::string& password)
 
 void PinUi::startAskWatcher()
 {
-    int fd = inotify_init1(IN_NONBLOCK);
-    if (fd < 0) {
-        log_err("inotify init failed");
-        return;
-    }
-    int askWatch = inotify_add_watch(fd, ask_dir, IN_MOVED_TO);
-    if (askWatch < 0) {
-        log_err("inotify watch add failed");
-        return;
-    }
+    if (!m_watcher) {
+        int fd = inotify_init1(IN_NONBLOCK);
+        if (fd < 0) {
+            log_err("inotify init failed");
+            return;
+        }
+        int askWatch = inotify_add_watch(fd, ask_dir, IN_MOVED_TO);
+        if (askWatch < 0) {
+            log_err("inotify watch add failed");
+            return;
+        }
 
-    std::function<NotifierCallbackType> callback(askWatcher);
-    eventLoop()->addNotifierCallback(fd, callback);
+        std::function<NotifierCallbackType> callback(askWatcher);
+        eventLoop()->addNotifierCallback(fd, callback);
+
+        m_watcher = true;
+    }
 }
 
 bool PinUi::askWatcher(int descriptor, uint32_t events)
 {
     (void)events;
+
+    // Flush inotify events
+    unsigned int available;
+    if (!ioctl(descriptor, FIONREAD, &available)) {
+        char buf[available];
+        (void) read(descriptor, buf, available);
+    }
+
     PinUi *instance = PinUi::instance();
-    instance->eventLoop()->removeNotifier(descriptor);
     // New file moved to the ask directory, assume password failed
     if (instance->m_checkTemporaryKey) {
         // Passphrase is not temporary key, ask user for key
