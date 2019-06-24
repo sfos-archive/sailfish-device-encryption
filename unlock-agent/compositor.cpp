@@ -346,6 +346,7 @@ struct UnitProps
     }
     void setString(const char *name, char **prev, const char *curr)
     {
+        (void)name; // unused if debug logging is disabled
         if (!equal(*prev, curr)) {
             log_debug(name << ": " << stringRepr(*prev)
                       << " -> " << stringRepr(curr));
