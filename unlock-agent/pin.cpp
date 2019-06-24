@@ -344,7 +344,9 @@ bool PinUi::askWatcher(int descriptor, uint32_t events)
     unsigned int available;
     if (!ioctl(descriptor, FIONREAD, &available)) {
         char buf[available];
-        (void) read(descriptor, buf, available);
+        if (read(descriptor, buf, available) == -1) {
+            // really don't care
+        }
     }
 
     PinUi *instance = PinUi::instance();
