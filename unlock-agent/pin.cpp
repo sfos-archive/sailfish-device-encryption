@@ -12,7 +12,6 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
-#include <gudev/gudev.h>
 
 #define ACCEPT_CODE 28
 #define UDISKS_DBUS_NAME "org.freedesktop.UDisks2"
@@ -74,7 +73,6 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop)
     , m_socket(nullptr)
     , m_watcher(false)
 {
-    watchForDBusChanges();
 }
 
 void PinUi::createUI()
@@ -130,7 +128,6 @@ void PinUi::createUI()
     m_label->setY(std::min(m_key->y() / 4 + headingVerticalOffset, m_key->y() - m_label->height() - MinUi::theme.paddingMedium));
     m_label->setColor(m_palette.pressed);
 
-
     m_busyIndicator = new MinUi::BusyIndicator(this);
     m_busyIndicator->setColor(m_palette.pressed);
     m_busyIndicator->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
@@ -151,38 +148,6 @@ void PinUi::createUI()
                 reset();
             }
             m_password->setText(m_password->text() + character);
-        }
-    });
-}
-
-void PinUi::watchForDBusChanges()
-{
-    // Get notified of DBus changes
-    m_dbus = new MinDBus::Object(MinDBus::systemBus(), "org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus");
-    m_dbus->connect<const char*, const char*, const char*>("NameOwnerChanged", [](const char* name, const char*, const char*) {
-        if (!strcmp(name, UDISKS_DBUS_NAME)) {
-            // UDisks2 change, check block devices
-            const gchar* subsystems[] = {"block", NULL};
-            GUdevClient* client = g_udev_client_new(subsystems);
-            if (client) {
-                bool cryptFound = false;
-                GList* devices = g_udev_client_query_by_subsystem (client, subsystems[0]);
-                for (GList* list = devices; list != NULL; list = list->next) {
-                    GUdevDevice* device = (GUdevDevice*) list->data;
-                    if (g_udev_device_has_property(device, UDISKS_UUID_PROPERTY)) {
-                        if (!strncmp(g_udev_device_get_property(device, UDISKS_UUID_PROPERTY), "CRYPT-", 6)) {
-                            // Crypted device, assume password ok
-                            cryptFound = true;
-                            break;
-                        }
-                    }
-                }
-                g_list_free_full(devices, g_object_unref);
-                g_object_unref(client);
-                if (cryptFound) {
-                    PinUi::instance()->exit(0);
-                }
-            }
         }
     });
 }

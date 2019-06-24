@@ -54,7 +54,6 @@ private:
 
     void updateAcceptVisibility();
     void createUI();
-    void watchForDBusChanges();
     virtual void displayStateChanged();
     virtual void updatesEnabledChanged();
     void sendPassword(const std::string& password);

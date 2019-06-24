@@ -7,7 +7,7 @@ After=mce.service
 After=dsme.service
 Wants=emergency-call.target
 After=emergency-call.target
-Conflicts=shutdown.target emergency.service display.service
+Conflicts=shutdown.target emergency.service
 Before=shutdown.target display.service
 ConditionDirectoryNotEmpty=/run/systemd/ask-password
 
