@@ -249,6 +249,7 @@ static bool ask_can_be_started()
         }
         dbus_connection_unref(m_systemBus);
     }
+    dbus_error_free(&err);
     return ack;
 }
 
