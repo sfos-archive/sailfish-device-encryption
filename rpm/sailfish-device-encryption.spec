@@ -54,7 +54,7 @@ Encrypts home partition on request.
 %setup -q
 
 %build
-pushd unlock-agent
+pushd sailfish-unlock-ui
 %qmake5 "VERSION=%{version}"
 make %{?_smp_mflags}
 popd
@@ -66,7 +66,7 @@ popd
 %install
 rm -rf %{buildroot}
 
-pushd unlock-agent
+pushd sailfish-unlock-ui
 %qmake5_install
 popd
 

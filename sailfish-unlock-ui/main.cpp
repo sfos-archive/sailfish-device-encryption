@@ -241,7 +241,7 @@ static bool ask_can_be_started()
         log_err("system bus connect failed: " << err.name << ": " <<  err.message);
     } else {
         if (dbus_bus_name_has_owner(m_systemBus, LIPSTICK_SERVICE, &err)) {
-            log_err("lipstick is running, unlock-agent ought not to be");
+            log_err("lipstick is running, sailfish-unlock-ui ought not to be");
         } else if (dbus_error_is_set(&err) && strcmp(err.name, DBUS_ERROR_NAME_HAS_NO_OWNER)) {
             log_err("failed to query lipstick availability: " << err.name << ": " << err.message);
         } else {
@@ -262,7 +262,7 @@ int main(int argc, char **argv)
     /* FIXME: Ensure that we do not get false positive systemd triggers.
      *
      * Meanwhile: Check that triggers we do get are something we ought
-     * to handle in the context of unlock-agent i.e. lipstick has not
+     * to handle in the context of sailfish-unlock-ui i.e. lipstick has not
      * been started yet. Return success so that systemd does not need
      * to consider restarting the oneshot.
      */
