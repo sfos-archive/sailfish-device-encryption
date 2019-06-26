@@ -53,6 +53,7 @@ Encrypts home partition on request.
 
 %package devel
 Summary:  Development files for Sailfish Device Encryption
+BuildRequires:  pkgconfig(Qt5Core)
 
 %description devel
 %{summary}.
