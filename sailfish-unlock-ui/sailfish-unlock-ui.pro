@@ -15,6 +15,9 @@ PKGCONFIG += \
     sailfish-minui \
     sailfish-minui-dbus \
     glib-2.0 \
+    mce \
+    dsme \
+    dsme_dbus_if \
     libresource \
     ohm-ext-route
 

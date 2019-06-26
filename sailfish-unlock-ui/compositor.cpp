@@ -4,44 +4,40 @@
 
 #include "compositor.h"
 #include "logging.h"
+#include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <mce/dbus-names.h>
 #include <mce/mode-names.h>
+#include <dsme/dsme_dbus_if.h>
 #include <sailfish-minui/eventloop.h>
 
-namespace Sailfish {
+#define COMPOSITOR_SERVICE "org.nemomobile.compositor"
+#define COMPOSITOR_PATH "/"
+#define COMPOSITOR_INTERFACE "org.nemomobile.compositor"
+#define COMPOSITOR_METHOD_SET_UPDATES_ENABLED "setUpdatesEnabled"
+#define COMPOSITOR_METHOD_GET_TOPMOST_WINDOW_PID "privateTopmostWindowProcessId"
+#define COMPOSITOR_SIGNAL_TOPMOST_WINDOW_PID_CHANGED "privateTopmostWindowProcessIdChanged"
 
-/* ========================================================================= *
- * Constants
- * ========================================================================= */
+#define SYSTEMD_SERVICE "org.freedesktop.systemd1"
+#define SYSTEMD_MANAGER_PATH "/org/freedesktop/systemd1"
+#define SYSTEMD_MANAGER_INTERFACE "org.freedesktop.systemd1.Manager"
+#define SYSTEMD_MANAGER_METHOD_LIST_UNITS "ListUnits"
+#define SYSTEMD_MANAGER_METHOD_SUBSCRIBE "Subscribe"
+#define SYSTEMD_MANAGER_METHOD_UNSUBSCRIBE "Unsubscribe"
 
-#define COMPOSITOR_SERVICE                       "org.nemomobile.compositor"
-#define COMPOSITOR_PATH                          "/"
-#define COMPOSITOR_IFACE                         "org.nemomobile.compositor"
-#define COMPOSITOR_SET_UPDATES_ENABLED           "setUpdatesEnabled"
-#define COMPOSITOR_GET_TOPMOST_WINDOW_PID        "privateTopmostWindowProcessId"
-#define COMPOSITOR_TOPMOST_WINDOW_PID_CHANGED    "privateTopmostWindowProcessIdChanged"
+#define SYSTEMD_TARGET_UNIT_PATH "/org/freedesktop/systemd1/unit/home_2emount"
+#define SYSTEMD_UNIT_INTERFACE "org.freedesktop.systemd1.Unit"
+#define SYSTEMD_UNIT_PROPERTY_ACTIVE_STATE "ActiveState"
+#define SYSTEMD_UNIT_PROPERTY_SUB_STATE "SubState"
 
-#define SYSTEMD_SERVICE                          "org.freedesktop.systemd1"
-#define SYSTEMD_MANAGER_PATH                     "/org/freedesktop/systemd1"
-#define SYSTEMD_TARGET_UNIT_PATH                 "/org/freedesktop/systemd1/unit/home_2emount"
-
-#define SYSTEMD_MANAGER_INTERFACE                "org.freedesktop.systemd1.Manager"
-#define SYSTEMD_MANAGER_METHOD_LIST_UNITS        "ListUnits"
-#define SYSTEMD_MANAGER_METHOD_SUBSCRIBE         "Subscribe"
-#define SYSTEMD_MANAGER_METHOD_UNSUBSCRIBE       "Unsubscribe"
-
-#define DBUS_PROPERTIES_INTERFACE                "org.freedesktop.DBus.Properties"
-#define DBUS_PROPERTIES_METHOD_GET               "Get"
-#define DBUS_PROPERTIES_METHOD_GET_ALL           "GetAll"
-#define DBUS_PROPERTIES_METHOD_SET               "Set"
-#define DBUS_PROPERTIES_SIGNAL_CHANGED           "PropertiesChanged"
-
-#define SYSTEMD_UNIT_INTERFACE                   "org.freedesktop.systemd1.Unit"
-#define SYSTEMD_MOUNT_PROPERTY_ACTIVE_STATE      "ActiveState"
-#define SYSTEMD_MOUNT_PROPERTY_SUB_STATE         "SubState"
+#define DBUS_PROPERTIES_INTERFACE "org.freedesktop.DBus.Properties"
+#define DBUS_PROPERTIES_METHOD_GET "Get"
+#define DBUS_PROPERTIES_METHOD_GET_ALL "GetAll"
+#define DBUS_PROPERTIES_METHOD_SET "Set"
+#define DBUS_PROPERTIES_SIGNAL_CHANGED "PropertiesChanged"
 
 /* While testing/debugging, it can be easier to start/stop
  * for example mce service rather than mount/unmount /home ...
@@ -51,285 +47,292 @@ namespace Sailfish {
 #define SYSTEMD_TARGET_UNIT_PATH "/org/freedesktop/systemd1/unit/mce_2eservice"
 #endif
 
-/* ========================================================================= *
- * Helpers
- * ========================================================================= */
-
+namespace Sailfish {
 #if LOGGING_ENABLE_DEBUG
-static const char *stringRepr(const char *str)
+static const char *stringRepr(const char *stringOrNull)
 {
-    return !str ? "<null>" : !*str ? "<empty>" : str;
+    if (!stringOrNull)
+        return "<null>";
+    if (!*stringOrNull)
+        return "<empty>";
+    return stringOrNull;
 }
 #endif
 
-static bool equal(const char *pat, const char *str)
+static bool stringsAreEqual(const char *patternString, const char *stringToMatch)
 {
-    // both are null or the same string
-    return !pat ? !str : str ? !strcmp(pat, str) : false;
-}
-
-static bool equal_or_dontcare(const char *pat, const char *str)
-{
-    // pat is null or the same as str, but null str does not match anything
-    return !str ? false : !pat ? true : !strcmp(pat, str);
-}
-
-/* ========================================================================= *
- * D-Bus glue
- * ========================================================================= */
-
-static const char *dbushelper_typename(int type)
-{
-    const char *name = "UNKNOWN";
-    switch (type) {
-    case DBUS_TYPE_INVALID:     name = "INVALID";     break;
-    case DBUS_TYPE_BYTE:        name = "BYTE";        break;
-    case DBUS_TYPE_BOOLEAN:     name = "BOOLEAN";     break;
-    case DBUS_TYPE_INT16:       name = "INT16";       break;
-    case DBUS_TYPE_UINT16:      name = "UINT16";      break;
-    case DBUS_TYPE_INT32:       name = "INT32";       break;
-    case DBUS_TYPE_UINT32:      name = "UINT32";      break;
-    case DBUS_TYPE_INT64:       name = "INT64";       break;
-    case DBUS_TYPE_UINT64:      name = "UINT64";      break;
-    case DBUS_TYPE_DOUBLE:      name = "DOUBLE";      break;
-    case DBUS_TYPE_STRING:      name = "STRING";      break;
-    case DBUS_TYPE_OBJECT_PATH: name = "OBJECT_PATH"; break;
-    case DBUS_TYPE_SIGNATURE:   name = "SIGNATURE";   break;
-    case DBUS_TYPE_UNIX_FD:     name = "UNIX_FD";     break;
-    case DBUS_TYPE_ARRAY:       name = "ARRAY";       break;
-    case DBUS_TYPE_VARIANT:     name = "VARIANT";     break;
-    case DBUS_TYPE_STRUCT:      name = "STRUCT";      break;
-    case DBUS_TYPE_DICT_ENTRY:  name = "DICT_ENTRY";  break;
-    default: break;
+    if (!patternString) {
+        if (!stringToMatch)
+            return true;
+        return false;
     }
-    return name;
+    if (!stringToMatch)
+        return false;
+    return !strcmp(patternString, stringToMatch);
 }
 
-static int
-dbushelper_at_type(DBusMessageIter *iter)
+static bool stringsAreEqualOrWeDoNotCare(const char *patternString, const char *stringToMatch)
 {
-    return dbus_message_iter_get_arg_type(iter);
-}
-
-static bool
-dbushelper_at_end(DBusMessageIter *iter)
-{
-    return dbushelper_at_type(iter) == DBUS_TYPE_INVALID;
-}
-
-static bool
-dbushelper_req_type(DBusMessageIter *iter, int type)
-{
-    int have = dbushelper_at_type(iter);
-    if (have == type)
+    if (!patternString)
         return true;
+    if (!stringToMatch)
+        return false;
+    return !strcmp(patternString, stringToMatch);
+}
 
+static const struct {
+    Compositor::DsmeState m_dsmeState;
+    const char *m_dsmeStateName;
+} dsmeStateLookupTable[] = {
+#define DSME_STATE(STATE, VALUE) { Compositor::DSME_STATE_##STATE, #STATE },
+#include <dsme/state_states.h>
+#undef DSME_STATE
+};
+
+static Compositor::DsmeState lookupDsmeStateValue(const char *dsmeStateName)
+{
+    Compositor::DsmeState dsmeStateValue = Compositor::DSME_STATE_NOT_SET;
+    for (size_t i = 0; i < sizeof dsmeStateLookupTable / sizeof *dsmeStateLookupTable; ++i) {
+        if (stringsAreEqual(dsmeStateLookupTable[i].m_dsmeStateName, dsmeStateName)) {
+            dsmeStateValue = dsmeStateLookupTable[i].m_dsmeState;
+            break;
+        }
+    }
+    return dsmeStateValue;
+}
+
+#if LOGGING_ENABLE_DEBUG
+static const char *lookupDsmeStateName(Compositor::DsmeState dsmeState)
+{
+    const char *dsmeStateName = "UNKNOWN";
+    for (size_t i = 0; i < sizeof dsmeStateLookupTable / sizeof *dsmeStateLookupTable; ++i) {
+        if (dsmeStateLookupTable[i].m_dsmeState == dsmeState) {
+            dsmeStateName = dsmeStateLookupTable[i].m_dsmeStateName;
+            break;
+        }
+    }
+    return dsmeStateName;
+}
+#endif
+
+static const char *lookupDbusTypeName(int type)
+{
+    switch (type) {
+    case DBUS_TYPE_INVALID:
+        return "INVALID";
+    case DBUS_TYPE_BYTE:
+        return "BYTE";
+    case DBUS_TYPE_BOOLEAN:
+        return "BOOLEAN";
+    case DBUS_TYPE_INT16:
+        return "INT16";
+    case DBUS_TYPE_UINT16:
+        return "UINT16";
+    case DBUS_TYPE_INT32:
+        return "INT32";
+    case DBUS_TYPE_UINT32:
+        return "UINT32";
+    case DBUS_TYPE_INT64:
+        return "INT64";
+    case DBUS_TYPE_UINT64:
+        return "UINT64";
+    case DBUS_TYPE_DOUBLE:
+        return "DOUBLE";
+    case DBUS_TYPE_STRING:
+        return "STRING";
+    case DBUS_TYPE_OBJECT_PATH:
+        return "OBJECT_PATH";
+    case DBUS_TYPE_SIGNATURE:
+        return "SIGNATURE";
+    case DBUS_TYPE_UNIX_FD:
+        return "UNIX_FD";
+    case DBUS_TYPE_ARRAY:
+        return "ARRAY";
+    case DBUS_TYPE_VARIANT:
+        return "VARIANT";
+    case DBUS_TYPE_STRUCT:
+        return "STRUCT";
+    case DBUS_TYPE_DICT_ENTRY:
+        return "DICT_ENTRY";
+    default:
+        return "UNKNOWN";
+    }
+}
+
+static int getTypeAtMessageIter(DBusMessageIter *messageIter)
+{
+    return dbus_message_iter_get_arg_type(messageIter);
+}
+
+static bool dbusIteratorHasNoMoreData(DBusMessageIter *messageIter)
+{
+    return getTypeAtMessageIter(messageIter) == DBUS_TYPE_INVALID;
+}
+
+static bool requireTypeAtMessageIter(DBusMessageIter *messageIter, int requiredType)
+{
+    int typeAtIterator = getTypeAtMessageIter(messageIter);
+    if (typeAtIterator == requiredType)
+        return true;
     log_err("dbus message parse error: expected "
-            << dbushelper_typename(type) << ", got "
-            << dbushelper_typename(have));
+            << lookupDbusTypeName(requiredType) << ", got "
+            << lookupDbusTypeName(typeAtIterator));
     return false;
 }
 
-#ifdef DEAD_CODE
-static bool
-dbushelper_get_int32(DBusMessageIter *iter, int *val)
+static bool parseStringValueFromMessageIter(DBusMessageIter *messageIter, const char **valuePointer)
 {
-    if (!dbushelper_req_type(iter, DBUS_TYPE_INT32))
+    if (!requireTypeAtMessageIter(messageIter, DBUS_TYPE_STRING))
         return false;
-
-    dbus_int32_t dta = 0;
-    dbus_message_iter_get_basic(iter, &dta);
-    dbus_message_iter_next(iter);
-    return *val = (int)dta, true;
-}
-#endif
-
-static bool
-dbushelper_get_string(DBusMessageIter *iter, const char **val)
-{
-    if (!dbushelper_req_type(iter, DBUS_TYPE_STRING))
-        return false;
-
-    const char *dta = 0;
-    dbus_message_iter_get_basic(iter, &dta);
-    dbus_message_iter_next(iter);
-    return *val = dta, true;
-}
-
-static bool
-dbushelper_get_variant(DBusMessageIter *iter, DBusMessageIter *sub)
-{
-    if (!dbushelper_req_type(iter, DBUS_TYPE_VARIANT))
-        return false;
-
-    dbus_message_iter_recurse(iter, sub);
-    dbus_message_iter_next(iter);
+    const char *stringData = 0;
+    dbus_message_iter_get_basic(messageIter, &stringData);
+    dbus_message_iter_next(messageIter);
+    *valuePointer = stringData;
     return true;
 }
 
-static bool
-dbushelper_get_array(DBusMessageIter *iter, DBusMessageIter *sub)
+static void parseStringArgumentFromMessageIter(DBusMessageIter *messageIter, const char **valuePointer)
 {
-    if (!dbushelper_req_type(iter, DBUS_TYPE_ARRAY))
-        return false;
+    const char *stringData = 0;
+    switch (getTypeAtMessageIter(messageIter)) {
+    case DBUS_TYPE_STRING:
+        dbus_message_iter_get_basic(messageIter, &stringData);
+        /* Fall through */
+    default:
+        dbus_message_iter_next(messageIter);
+        /* Fall through */
+    case DBUS_TYPE_INVALID:
+        break;
+    }
+    *valuePointer = stringData;
+}
 
-    dbus_message_iter_recurse(iter, sub);
-    dbus_message_iter_next(iter);
+static bool parseVariantContainerFromMessageIter(DBusMessageIter *messageIter, DBusMessageIter *containerIter)
+{
+    if (!requireTypeAtMessageIter(messageIter, DBUS_TYPE_VARIANT))
+        return false;
+    dbus_message_iter_recurse(messageIter, containerIter);
+    dbus_message_iter_next(messageIter);
     return true;
 }
 
-static bool
-dbushelper_get_dentry(DBusMessageIter *iter, DBusMessageIter *sub)
+static bool parseArrayContainerFromMessageIter(DBusMessageIter *messageIter, DBusMessageIter *containerIter)
 {
-    if (!dbushelper_req_type(iter, DBUS_TYPE_DICT_ENTRY))
+    if (!requireTypeAtMessageIter(messageIter, DBUS_TYPE_ARRAY))
         return false;
-
-    dbus_message_iter_recurse(iter, sub);
-    dbus_message_iter_next(iter);
+    dbus_message_iter_recurse(messageIter, containerIter);
+    dbus_message_iter_next(messageIter);
     return true;
 }
 
-#ifdef DEAD_CODE
-static bool
-dbushelper_get_struct(DBusMessageIter *iter, DBusMessageIter *sub)
+static bool parseDictEntryContainerFromMessageIter(DBusMessageIter *messageIter, DBusMessageIter *containerIter)
 {
-    if (!dbushelper_req_type(iter, DBUS_TYPE_STRUCT))
+    if (!requireTypeAtMessageIter(messageIter, DBUS_TYPE_DICT_ENTRY))
         return false;
-
-    dbus_message_iter_recurse(iter, sub);
-    dbus_message_iter_next(iter);
+    dbus_message_iter_recurse(messageIter, containerIter);
+    dbus_message_iter_next(messageIter);
     return true;
 }
-#endif
 
-static bool
-dbushelper_send_va(DBusConnection *connection,
-             const char *service,
-             const char *path,
-             const char *interface,
-             const char *member,
-             DBusPendingCallNotifyFunction callback,
-             void *user_data,
-             DBusFreeFunction user_free,
-             DBusPendingCall **ppc,
-             int first_arg_type,
-             va_list va)
+static bool sendDbusMethodCallMessageVaList(DBusConnection *dbusConnection, const char *serviceName, const char *objectPath,
+                                            const char *interfaceName, const char *memberName,
+                                            DBusPendingCallNotifyFunction replyNotifyFunction, void *userDataPointer,
+                                            DBusFreeFunction userDataFreeFunction, DBusPendingCall **optionalPendingCallResult,
+                                            int firstArgumentType, va_list vaList)
 {
-    bool res = false;
-    DBusMessage *msg = 0;
-    if ((msg = dbus_message_new_method_call(service, path, interface, member))) {
-        if (first_arg_type != DBUS_TYPE_INVALID &&
-            !dbus_message_append_args_valist(msg, first_arg_type, va)) {
+    log_debug("send: " << serviceName << ": " << interfaceName << "." << memberName);
+    bool messageSuccesfullySent = false;
+    DBusMessage *methodCallMessage = 0;
+    if ((methodCallMessage = dbus_message_new_method_call(serviceName, objectPath, interfaceName, memberName))) {
+        if (firstArgumentType != DBUS_TYPE_INVALID && !dbus_message_append_args_valist(methodCallMessage, firstArgumentType, vaList)) {
             log_err("failed to append arguments to D-Bus message: "
-                    << interface << "." <<  member);
-        } else if (!callback) {
-            dbus_message_set_no_reply(msg, true);
-            if (dbus_connection_send(connection, msg, 0))
-                res = true;
+                    << interfaceName << "." <<  memberName);
+        } else if (!replyNotifyFunction) {
+            dbus_message_set_no_reply(methodCallMessage, true);
+            if (dbus_connection_send(dbusConnection, methodCallMessage, 0))
+                messageSuccesfullySent = true;
         } else {
-            const int timeout = -1;
-            DBusPendingCall *pc = 0;
-            if (dbus_connection_send_with_reply(connection, msg, &pc, timeout)) {
-                if (pc) {
-                    if (dbus_pending_call_set_notify(pc, callback, user_data, user_free)) {
-                        user_data = 0;
-                        user_free = 0;
-                        if (ppc)
-                            *ppc = dbus_pending_call_ref(pc);
-                        res = true;
+            const int timeoutInMilliseconds = DBUS_TIMEOUT_USE_DEFAULT;
+            DBusPendingCall *pendingCall = 0;
+            if (dbus_connection_send_with_reply(dbusConnection, methodCallMessage, &pendingCall, timeoutInMilliseconds)) {
+                if (pendingCall) {
+                    if (dbus_pending_call_set_notify(pendingCall, replyNotifyFunction, userDataPointer, userDataFreeFunction)) {
+                        userDataPointer = 0;
+                        userDataFreeFunction = 0;
+                        if (optionalPendingCallResult)
+                            *optionalPendingCallResult = dbus_pending_call_ref(pendingCall);
+                        messageSuccesfullySent = true;
                     }
-                    dbus_pending_call_unref(pc);
+                    dbus_pending_call_unref(pendingCall);
                 }
             }
         }
-        dbus_message_unref(msg);
+        dbus_message_unref(methodCallMessage);
     }
-    if (user_free)
-        user_free(user_data);
-    return res;
+    if (userDataFreeFunction)
+        userDataFreeFunction(userDataPointer);
+    return messageSuccesfullySent;
 }
 
-static bool
-dbushelper_send(DBusConnection *connection,
-                const char *service,
-                const char *path,
-                const char *interface,
-                const char *member,
-                DBusPendingCallNotifyFunction callback,
-                void       *user_data,
-                DBusFreeFunction user_free,
-                DBusPendingCall **ppc,
-                int first_arg_type, ...)
+static bool sendDbusMethodCallMessage(DBusConnection *dbusConnection, const char *serviceName, const char *objectPath,
+                                      const char *interfaceName, const char *memberName,
+                                      DBusPendingCallNotifyFunction replyNotifyFunction, void *userDataPointer,
+                                      DBusFreeFunction userDataFreeFunction, DBusPendingCall **optionalPendingCallResult,
+                                      int firstArgumentType, ...)
 {
-    va_list va;
-    va_start(va, first_arg_type);
-    bool res = dbushelper_send_va(connection, service, path, interface, member,
-                                  callback, user_data, user_free,
-                                  ppc, first_arg_type, va);
-    va_end(va);
-    return res;
+    va_list vaList;
+    va_start(vaList, firstArgumentType);
+    bool messageSuccesfullySent = sendDbusMethodCallMessageVaList(dbusConnection, serviceName, objectPath, interfaceName, memberName,
+                                                                  replyNotifyFunction, userDataPointer, userDataFreeFunction,
+                                                                  optionalPendingCallResult, firstArgumentType, vaList);
+    va_end(vaList);
+    return messageSuccesfullySent;
 }
 
-static DBusMessage *
-dbushelper_steal_reply(DBusPendingCall *pc)
+static DBusMessage *getReplyMessageFromPendingCall(DBusPendingCall *pendingCall)
 {
-    DBusMessage *ret = 0;
-    DBusMessage *rsp = 0;
-    DBusError    err = DBUS_ERROR_INIT;
-
-    if (!(rsp = dbus_pending_call_steal_reply(pc))) {
+    DBusMessage *replyMessageToReturn = 0;
+    DBusMessage *replyMessageCandidate = 0;
+    DBusError dbusError = DBUS_ERROR_INIT;
+    if (!(replyMessageCandidate = dbus_pending_call_steal_reply(pendingCall))) {
         log_err("got null reply");
-    } else if (dbus_set_error_from_message(&err, rsp)) {
-        if (equal(err.name, DBUS_ERROR_NAME_HAS_NO_OWNER))
-            log_err("got no reply");
-        else
-            log_err("got error reply: " << err.name << ": " << err.message);
+    } else if (dbus_set_error_from_message(&dbusError, replyMessageCandidate)) {
+        if (!stringsAreEqual(dbusError.name, DBUS_ERROR_NAME_HAS_NO_OWNER))
+            log_err("got error reply: " << dbusError.name << ": " << dbusError.message);
     } else {
-        ret = rsp;
-        rsp = 0;
+        replyMessageToReturn = replyMessageCandidate;
+        replyMessageCandidate = 0;
     }
-
-    if (rsp)
-        dbus_message_unref(rsp);
-    dbus_error_free(&err);
-
-    return ret;
+    if (replyMessageCandidate)
+        dbus_message_unref(replyMessageCandidate);
+    dbus_error_free(&dbusError);
+    return replyMessageToReturn;
 }
 
-static bool
-dbushelper_parse_args(DBusMessage *msg, int first_arg_type, ...)
+static bool parseArgumentsFromDbusMessage(DBusMessage *dbusMessage, int firstArgumentType, ...)
 {
-    bool         ack = false;
-    DBusError    err = DBUS_ERROR_INIT;
-
-    va_list va;
-    va_start(va, first_arg_type);
-    if (!dbus_message_get_args_valist(msg, &err, first_arg_type, va))
-        log_err("parse error: " << err.name << ": " << err.message);
+    bool successfullyCompleted = false;
+    DBusError dbusError = DBUS_ERROR_INIT;
+    va_list vaList;
+    va_start(vaList, firstArgumentType);
+    if (!dbus_message_get_args_valist(dbusMessage, &dbusError, firstArgumentType, vaList))
+        log_err("parse error: " << dbusError.name << ": " << dbusError.message);
     else
-        ack = true;
-    va_end(va);
-
-    dbus_error_free(&err);
-
-    return ack;
+        successfullyCompleted = true;
+    va_end(vaList);
+    dbus_error_free(&dbusError);
+    return successfullyCompleted;
 }
 
-/* ========================================================================= *
- * UnitProps
- * ========================================================================= */
-
-struct UnitProps
+class TargetUnitProperties
 {
-    char *m_activeState;
-    char *m_subState;
-
-    UnitProps()
+public:
+    TargetUnitProperties()
     {
         m_activeState = nullptr;
         m_subState = nullptr;
     }
-    ~UnitProps()
+    ~TargetUnitProperties()
     {
         free(m_activeState);
         m_activeState = nullptr;
@@ -344,135 +347,599 @@ struct UnitProps
     {
         return m_subState;
     }
-    void setString(const char *name, char **prev, const char *curr)
+    void updateFromMessageIter(DBusMessageIter *messageIter);
+private:
+    void setStringValue(const char *keyName, char **pointerToPreviousValue, const char *currentValue)
     {
-        (void)name; // unused if debug logging is disabled
-        if (!equal(*prev, curr)) {
-            log_debug(name << ": " << stringRepr(*prev)
-                      << " -> " << stringRepr(curr));
-            free(*prev);
-            *prev = curr ? strdup(curr) : nullptr;
+        (void)keyName; /* unused if debug logging is disabled */
+        if (!stringsAreEqual(*pointerToPreviousValue, currentValue)) {
+            log_debug(keyName << ": " << stringRepr(*pointerToPreviousValue)
+                      << " -> " << stringRepr(currentValue));
+            free(*pointerToPreviousValue);
+            *pointerToPreviousValue = currentValue ? strdup(currentValue) : nullptr;
         }
     }
-    void setActiveState(const char *val)
+    void setActiveState(const char *activeState)
     {
-        setString("m_activeState", &m_activeState, val);
+        setStringValue("m_activeState", &m_activeState, activeState);
     }
-    void setSubState(const char *val)
+    void setSubState(const char *subState)
     {
-        setString("m_subState", &m_subState, val);
+        setStringValue("m_subState", &m_subState, subState);
     }
-    void updateFrom(DBusMessageIter *iter);
+    char *m_activeState;
+    char *m_subState;
 };
 
-void UnitProps::updateFrom(DBusMessageIter *iter)
+void TargetUnitProperties::updateFromMessageIter(DBusMessageIter *messageIter)
 {
     /* Parse array of added/changed keys
      */
-    DBusMessageIter changed;
-    if (dbushelper_get_array(iter, &changed)) {
+    DBusMessageIter changedValuesArrayIter;
+    if (parseArrayContainerFromMessageIter(messageIter, &changedValuesArrayIter)) {
         for (;;) {
-            if (dbushelper_at_end(&changed)) {
-                /* Parse array of dropped keys
+            if (dbusIteratorHasNoMoreData(&changedValuesArrayIter)) {
+                /* End of added/changed keys reached
+                 *
+                 * Parse array of dropped keys
                  *
                  * Note that this is present in change notification
                  * signals, but not in method call reply messages and
                  * thus needs to be treated as optional.
                  */
-                DBusMessageIter dropped;
-                if (!dbushelper_at_end(iter)) {
-                    if (dbushelper_get_array(iter, &dropped)) {
-                        while (!dbushelper_at_end(&dropped)) {
-                            const char *key = 0;
-                            if (!dbushelper_get_string(&dropped, &key))
+                DBusMessageIter droppedValuesArrayIter;
+                if (!dbusIteratorHasNoMoreData(messageIter)) {
+                    if (parseArrayContainerFromMessageIter(messageIter, &droppedValuesArrayIter)) {
+                        while (!dbusIteratorHasNoMoreData(&droppedValuesArrayIter)) {
+                            const char *propertyName = 0;
+                            if (!parseStringValueFromMessageIter(&droppedValuesArrayIter, &propertyName))
                                 break;
-                            if (equal(key, SYSTEMD_MOUNT_PROPERTY_ACTIVE_STATE))
+                            if (stringsAreEqual(propertyName, SYSTEMD_UNIT_PROPERTY_ACTIVE_STATE))
                                 setActiveState(0);
-                            else if (equal(key, SYSTEMD_MOUNT_PROPERTY_SUB_STATE))
+                            else if (stringsAreEqual(propertyName, SYSTEMD_UNIT_PROPERTY_SUB_STATE))
                                 setSubState(0);
                         }
                     }
                 }
                 break;
             }
-            DBusMessageIter dentry;
-            if (!dbushelper_get_dentry(&changed, &dentry))
+            DBusMessageIter dictEntryIter;
+            if (!parseDictEntryContainerFromMessageIter(&changedValuesArrayIter, &dictEntryIter))
                 break;
-            const char *key = 0;
-            if (!dbushelper_get_string(&dentry, &key))
+            const char *propertyName = 0;
+            if (!parseStringValueFromMessageIter(&dictEntryIter, &propertyName))
                 break;
-            DBusMessageIter var;
-            if (!dbushelper_get_variant(&dentry, &var))
+            DBusMessageIter variantIter;
+            if (!parseVariantContainerFromMessageIter(&dictEntryIter, &variantIter))
                 break;
-            if (equal(key, SYSTEMD_MOUNT_PROPERTY_ACTIVE_STATE)) {
-                const char *state = 0;
-                if (dbushelper_get_string(&var, &state))
-                    setActiveState(state);
-            } else if (equal(key, SYSTEMD_MOUNT_PROPERTY_SUB_STATE)) {
+            if (stringsAreEqual(propertyName, SYSTEMD_UNIT_PROPERTY_ACTIVE_STATE)) {
+                const char *activeState = 0;
+                if (parseStringValueFromMessageIter(&variantIter, &activeState))
+                    setActiveState(activeState);
+            } else if (stringsAreEqual(propertyName, SYSTEMD_UNIT_PROPERTY_SUB_STATE)) {
                 const char *subState = 0;
-                if (dbushelper_get_string(&var, &subState))
+                if (parseStringValueFromMessageIter(&variantIter, &subState))
                     setSubState(subState);
             }
         }
     }
 }
 
-/* ========================================================================= *
- * Compositor
- * ========================================================================= */
-
 Compositor::~Compositor()
 {
     disconnectFromSystemBus();
     free(m_mceNameOwner);
-    delete m_targetUnitProps;
+    m_mceNameOwner = nullptr;
+    delete m_targetUnitProperties;
+    m_targetUnitProperties = nullptr;
 }
 
 Compositor::Compositor(MinUi::EventLoop *eventLoop)
-    : m_systemBus(nullptr)
-    , m_displayState(DisplayState::Unknown)
-    , m_updatesEnabled(-1) // change to true/false => notification
-    , m_compositorOwned(false)
-    , m_replacementAllowed(false)
+    : m_eventLoop(eventLoop)
+    , m_systemBusConnection(nullptr)
     , m_targetUnitActive(false)
-    , m_targetUnitProps(new UnitProps)
-    , m_mceAvailable(false)
+    , m_targetUnitProperties(new TargetUnitProperties)
+    , m_dsmeNameOwner(nullptr)
+    , m_dsmeIsRunning(false)
+    , m_dsmeState(DSME_STATE_NOT_SET)
+    , m_compositorNameOwned(false)
+    , m_replacingCompositorNameOwnerAllowed(false)
+    , m_updatesState(UpdatesState::UpdatesUnknown)
     , m_mceNameOwner(nullptr)
+    , m_mceIsRunning(false)
     , m_blankPreventWanted(false)
     , m_blankPreventAllowed(false)
-    , m_blankPreventTimer(0)
-    , m_eventLoop(eventLoop)
+    , m_blankPreventRenewTimer(0)
+    , m_batteryLevel(MCE_BATTERY_LEVEL_UNKNOWN)
+    , m_batteryStatus(BatteryStatus::BatteryUnknown)
+    , m_chargerState(ChargerState::ChargerUnknown)
+    , m_displayState(DisplayState::DisplayUnknown)
 {
     if (!connectToSystemBus()) {
         log_err("no system bus connection; terminating");
         ::abort();
     }
-
-    if (!acquireName()) {
+    if (!sendCompositorNameOwnershipRequestToDbusDaemon()) {
         log_err("compositor name ownership not acquired; terminating");
         ::abort();
     }
 }
 
-/* ========================================================================= *
- * compositorOwned
- * ========================================================================= */
-
-bool
-Compositor::compositorOwned() const
+Compositor::DisplayState Compositor::displayState() const
 {
-    return m_compositorOwned;
+    return m_displayState;
+}
+
+void Compositor::displayStateChanged()
+{
+    /* This is a stub virtual function */
+    log_debug("ignoring: display state change");
+}
+
+void Compositor::updateInternallyCachedDisplayState(const char *displayStateName)
+{
+    DisplayState previousDisplayState = m_displayState;
+    if (!strcmp(displayStateName, MCE_DISPLAY_ON_STRING))
+        m_displayState = DisplayState::DisplayOn;
+    else if (!strcmp(displayStateName, MCE_DISPLAY_DIM_STRING))
+        m_displayState = DisplayState::DisplayDim;
+    else if (!strcmp(displayStateName, MCE_DISPLAY_OFF_STRING))
+        m_displayState = DisplayState::DisplayOff;
+    else
+        m_displayState = DisplayState::DisplayUnknown;
+    if (previousDisplayState != m_displayState) {
+        log_debug("display state: " << m_displayState << " " << displayStateName);
+        displayStateChanged();
+    }
+}
+
+void Compositor::handleDisplayStateMessageFromMce(DBusMessage *signalOrReplyMessage)
+{
+    const char *displayStateName = 0;
+    if (parseArgumentsFromDbusMessage(signalOrReplyMessage, DBUS_TYPE_STRING, &displayStateName, DBUS_TYPE_INVALID))
+        updateInternallyCachedDisplayState(displayStateName);
+}
+
+void Compositor::handleDisplayStateSignalFromMce(DBusMessage *signalMessage)
+{
+    handleDisplayStateMessageFromMce(signalMessage);
+}
+
+void Compositor::handleDisplayStateReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer)
+{
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    DBusMessage *replyMessage = 0;
+    if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+        thisAsUserDataPointer->handleDisplayStateMessageFromMce(replyMessage);
+        dbus_message_unref(replyMessage);
+    }
+}
+
+void Compositor::sendDisplayStateQueryToMce()
+{
+    sendDbusMethodCallMessage(m_systemBusConnection, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF,
+                              MCE_DISPLAY_STATUS_GET, handleDisplayStateReplyFromMce,
+                              static_cast<void *>(this), 0, 0, DBUS_TYPE_INVALID);
+}
+
+Compositor::ChargerState Compositor::chargerState() const
+{
+    return m_chargerState;
+}
+
+void Compositor::chargerStateChanged()
+{
+    /* This is a stub virtual function */
+    log_debug("ignoring: charger state change");
+}
+
+void Compositor::updateInternallyCachedChargerState(const char *chargerStateName)
+{
+    ChargerState previousChargerState = m_chargerState;
+    if (!strcmp(chargerStateName, MCE_CHARGER_STATE_ON))
+        m_chargerState = ChargerState::ChargerOn;
+    else if (!strcmp(chargerStateName, MCE_CHARGER_STATE_OFF))
+        m_chargerState = ChargerState::ChargerOff;
+    else
+        m_chargerState = ChargerState::ChargerUnknown;
+    if (previousChargerState != m_chargerState) {
+        log_debug("m_chargerState: " << m_chargerState << " " << chargerStateName);
+        chargerStateChanged();
+    }
+}
+
+void Compositor::handleChargerStateMessageFromMce(DBusMessage *signalOrReplyMessage)
+{
+    const char *chargerStateName = 0;
+    if (parseArgumentsFromDbusMessage(signalOrReplyMessage, DBUS_TYPE_STRING, &chargerStateName, DBUS_TYPE_INVALID))
+        updateInternallyCachedChargerState(chargerStateName);
+}
+
+void Compositor::handleChargerStateSignalFromMce(DBusMessage *signalMessage)
+{
+    handleChargerStateMessageFromMce(signalMessage);
+}
+
+void Compositor::handleChargerStateReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer)
+{
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    DBusMessage *replyMessage = 0;
+    if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+        thisAsUserDataPointer->handleChargerStateMessageFromMce(replyMessage);
+        dbus_message_unref(replyMessage);
+    }
+}
+
+void Compositor::sendChargerStateQueryToMce()
+{
+    log_debug("charger state: query");
+    sendDbusMethodCallMessage(m_systemBusConnection, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF,
+                              MCE_CHARGER_STATE_GET, handleChargerStateReplyFromMce,
+                              static_cast<void *>(this), 0, 0, DBUS_TYPE_INVALID);
+}
+
+Compositor::BatteryStatus Compositor::batteryStatus() const
+{
+    return m_batteryStatus;
+}
+
+void Compositor::batteryStatusChanged()
+{
+    /* This is a stub virtual function */
+    log_debug("ignoring: battery status change");
+}
+
+void Compositor::updateInternallyCachedBatteryStatus(const char *batteryStatusName)
+{
+    BatteryStatus previousBatteryStatus = m_batteryStatus;
+    if (!strcmp(batteryStatusName, MCE_BATTERY_STATUS_FULL))
+        m_batteryStatus = BatteryStatus::BatteryFull;
+    else if (!strcmp(batteryStatusName, MCE_BATTERY_STATUS_OK))
+        m_batteryStatus = BatteryStatus::BatteryOk;
+    else if (!strcmp(batteryStatusName, MCE_BATTERY_STATUS_LOW))
+        m_batteryStatus = BatteryStatus::BatteryLow;
+    else if (!strcmp(batteryStatusName, MCE_BATTERY_STATUS_EMPTY))
+        m_batteryStatus = BatteryStatus::BatteryEmpty;
+    else
+        m_batteryStatus = BatteryStatus::BatteryUnknown;
+    if (previousBatteryStatus != m_batteryStatus) {
+        log_debug("m_batteryStatus: " << m_batteryStatus << " " << batteryStatusName);
+        batteryStatusChanged();
+    }
+}
+
+void Compositor::handleBatteryStatusMessageFromMce(DBusMessage *signalOrReplyMessage)
+{
+    const char *batteryStatusName = 0;
+    if (parseArgumentsFromDbusMessage(signalOrReplyMessage, DBUS_TYPE_STRING, &batteryStatusName, DBUS_TYPE_INVALID))
+        updateInternallyCachedBatteryStatus(batteryStatusName);
+}
+
+void Compositor::handleBatteryStatusSignalFromMce(DBusMessage *signalyMessage)
+{
+    handleBatteryStatusMessageFromMce(signalyMessage);
+}
+
+void Compositor::handleBatteryStatusReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer)
+{
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    DBusMessage *replyMessage = 0;
+    if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+        thisAsUserDataPointer->handleBatteryStatusMessageFromMce(replyMessage);
+        dbus_message_unref(replyMessage);
+    }
+}
+
+void Compositor::sendBatteryStatusQueryToMce()
+{
+    log_debug("battery status: query");
+    sendDbusMethodCallMessage(m_systemBusConnection, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF,
+                              MCE_BATTERY_STATUS_GET, handleBatteryStatusReplyFromMce,
+                              static_cast<void *>(this), 0, 0, DBUS_TYPE_INVALID);
+}
+
+int Compositor::batteryLevel() const
+{
+    return m_batteryLevel;
+}
+
+void Compositor::batteryLevelChanged()
+{
+    /* This is a stub virtual function */
+    log_debug("ignoring: battery level change");
+}
+
+void Compositor::updateInsternallyCacheBatteryLevel(int batteryLevel)
+{
+    if (m_batteryLevel != batteryLevel) {
+        m_batteryLevel = batteryLevel;
+        log_debug("m_batteryLevel: " << m_batteryLevel);
+        batteryLevelChanged();
+    }
+}
+
+void Compositor::handlebatteryLevelMessageFromMce(DBusMessage *signalOrReplyMessage)
+{
+    dbus_int32_t batteryLevel = 0;
+    if (parseArgumentsFromDbusMessage(signalOrReplyMessage, DBUS_TYPE_INT32, &batteryLevel, DBUS_TYPE_INVALID))
+        updateInsternallyCacheBatteryLevel(batteryLevel);
+}
+
+void Compositor::handlebatteryLevelSignalFromMce(DBusMessage *signalMessage)
+{
+    handlebatteryLevelMessageFromMce(signalMessage);
+}
+
+void Compositor::handleBatteryLevelReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer)
+{
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    DBusMessage *replyMessage = 0;
+    if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+        thisAsUserDataPointer->handlebatteryLevelMessageFromMce(replyMessage);
+        dbus_message_unref(replyMessage);
+    }
+}
+
+void Compositor::sendBatteryLevelQueryToMce()
+{
+    log_debug("battery level: query");
+    sendDbusMethodCallMessage(m_systemBusConnection, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF,
+                              MCE_BATTERY_LEVEL_GET, handleBatteryLevelReplyFromMce,
+                              static_cast<void *>(this), 0, 0, DBUS_TYPE_INVALID);
 }
 
 void
-Compositor::updateCompositorOwned(bool owned)
+Compositor::sendBlankingPauseStopRequestToMce()
 {
-    if (m_compositorOwned != owned) {
-        m_compositorOwned = owned;
-        log_debug("m_compositorOwned: " << m_compositorOwned);
+    if (mceIsRunning())
+        sendDbusMethodCallMessage(m_systemBusConnection, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF,
+                                  MCE_CANCEL_PREVENT_BLANK_REQ, 0, 0, 0, 0, DBUS_TYPE_INVALID);
+}
 
-        if (m_compositorOwned) {
-            evaluateNameReplacement();
+void Compositor::sendBlankingPauseStartRequestToMce()
+{
+    sendDbusMethodCallMessage(m_systemBusConnection, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF,
+                              MCE_PREVENT_BLANK_REQ, 0, 0, 0, 0, DBUS_TYPE_INVALID);
+}
+
+void Compositor::evaluateNeedForBlankingPauseTimer()
+{
+    /* MCE allows 60 second renew delay. Note that there is no named
+     * constant for this value. */
+    const int renewDelay = 60 * 1000; /* [ms] */
+    bool preventBlanking = m_blankPreventWanted && m_blankPreventAllowed;
+    if (preventBlanking) {
+        if (!m_blankPreventRenewTimer) {
+            log_debug("blanking pause: start");
+            sendBlankingPauseStartRequestToMce();
+            m_blankPreventRenewTimer = m_eventLoop->createTimer(renewDelay,
+                                                                [this]() {
+                                                                  log_debug("blanking pause: renew");
+                                                                  sendBlankingPauseStartRequestToMce();
+                                                                });
+        }
+    } else {
+        if (m_blankPreventRenewTimer) {
+            log_debug("blanking pause: stop");
+            m_eventLoop->cancelTimer(m_blankPreventRenewTimer);
+            m_blankPreventRenewTimer = 0;
+            sendBlankingPauseStopRequestToMce();
+        }
+    }
+}
+
+void Compositor::setBlankPreventWanted(bool blankPreventWanted)
+{
+    if (m_blankPreventWanted != blankPreventWanted) {
+        m_blankPreventWanted = blankPreventWanted;
+        log_debug("m_blankPreventWanted: " << m_blankPreventWanted);
+        evaluateNeedForBlankingPauseTimer();
+    }
+}
+
+void Compositor::updateInternallyCachedBlankPreventAllowed(bool blankPreventAllowed)
+{
+    if (m_blankPreventAllowed != blankPreventAllowed) {
+        m_blankPreventAllowed = blankPreventAllowed;
+        log_debug("m_blankPreventAllowed: " << m_blankPreventAllowed);
+        evaluateNeedForBlankingPauseTimer();
+    }
+}
+
+void Compositor::handleBlankPreventAllowedMessageFromMce(DBusMessage *signalOrReplyMessage)
+{
+    dbus_bool_t blankPreventAllowed = false;
+    if (parseArgumentsFromDbusMessage(signalOrReplyMessage, DBUS_TYPE_BOOLEAN, &blankPreventAllowed, DBUS_TYPE_INVALID))
+        updateInternallyCachedBlankPreventAllowed(blankPreventAllowed);
+}
+
+void Compositor::handleBlankPreventAllowedSignalFromMce(DBusMessage *signalMessage)
+{
+    handleBlankPreventAllowedMessageFromMce(signalMessage);
+}
+
+void Compositor::handleBlankPreventAllowedReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer)
+{
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    DBusMessage *replyMessage = 0;
+    if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+        thisAsUserDataPointer->handleBlankPreventAllowedMessageFromMce(replyMessage);
+        dbus_message_unref(replyMessage);
+    }
+}
+
+void Compositor::sendBlankPreventAllowedQueryToMce()
+{
+    sendDbusMethodCallMessage(m_systemBusConnection, MCE_SERVICE, MCE_REQUEST_PATH, MCE_REQUEST_IF,
+                              MCE_PREVENT_BLANK_ALLOWED_GET, handleBlankPreventAllowedReplyFromMce,
+                              static_cast<void *>(this), 0, 0, DBUS_TYPE_INVALID);
+}
+
+bool Compositor::mceIsRunning() const
+{
+    return m_mceIsRunning;
+}
+
+void Compositor::updateInternallyCachedMceIsRunning(bool mceIsRunning)
+{
+    if (m_mceIsRunning != mceIsRunning) {
+        m_mceIsRunning = mceIsRunning;
+        log_debug("m_mceIsRunning: " << m_mceIsRunning);
+        if (m_mceIsRunning) {
+            /* Note: Getting updatesEnabled in sync is handled by mce side */
+            sendDisplayStateQueryToMce();
+            sendChargerStateQueryToMce();
+            sendBatteryStatusQueryToMce();
+            sendBatteryLevelQueryToMce();
+            sendBlankPreventAllowedQueryToMce();
+        } else {
+            /* Stop blank prevent ping-pong */
+            updateInternallyCachedBlankPreventAllowed(false);
+        }
+    }
+}
+
+void Compositor::updateInternallyCachedMceNameOwner(const char *mceNameOwner)
+{
+    if (mceNameOwner && !*mceNameOwner)
+        mceNameOwner = nullptr;
+    if (!stringsAreEqual(m_mceNameOwner, mceNameOwner)) {
+        log_debug("m_mceNameOwner: "
+                  << stringRepr(m_mceNameOwner) << " ->"
+                  << stringRepr(mceNameOwner));
+        /* If we ever see handoff from one owner to another, it needs
+         * to be handled as: oldOwner -> noOwner -> newOwner.
+         */
+        free(m_mceNameOwner);
+        m_mceNameOwner = nullptr;
+        updateInternallyCachedMceIsRunning(false);
+        if (mceNameOwner) {
+            m_mceNameOwner = strdup(mceNameOwner);
+            updateInternallyCachedMceIsRunning(true);
+        }
+    }
+}
+
+void Compositor::handleMceNameOwnerSignalFromDbusDaemon(DBusMessage *signalMessage)
+{
+    const char *dbusName = 0;
+    const char *previousNameOwner = 0;
+    const char *currentNameOwner = 0;
+    if (parseArgumentsFromDbusMessage(signalMessage, DBUS_TYPE_STRING, &dbusName,
+                              DBUS_TYPE_STRING, &previousNameOwner,
+                              DBUS_TYPE_STRING, &currentNameOwner, DBUS_TYPE_INVALID)) {
+        if (stringsAreEqual(dbusName, MCE_SERVICE))
+            updateInternallyCachedMceNameOwner(currentNameOwner);
+    }
+}
+
+void Compositor::handleMceNameOwnerReplyFromDbusDaemon(DBusPendingCall *pendingCall, void *userDataPointer)
+{
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    DBusMessage *replyMessage = 0;
+    if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+        const char *currentNameOwner = 0;
+        if (parseArgumentsFromDbusMessage(replyMessage, DBUS_TYPE_STRING, &currentNameOwner, DBUS_TYPE_INVALID))
+            thisAsUserDataPointer->updateInternallyCachedMceNameOwner(currentNameOwner);
+        dbus_message_unref(replyMessage);
+    }
+}
+
+void Compositor::sendMceNameOwnerQueryToDbusDaemon()
+{
+    const char *argument = MCE_SERVICE;
+    sendDbusMethodCallMessage(m_systemBusConnection, DBUS_SERVICE_DBUS, DBUS_PATH_DBUS, DBUS_INTERFACE_DBUS,
+                              "GetNameOwner", handleMceNameOwnerReplyFromDbusDaemon,
+                              static_cast<void *>(this), 0, 0, DBUS_TYPE_STRING, &argument, DBUS_TYPE_INVALID);
+}
+
+bool Compositor::updatesEnabled() const
+{
+    return m_updatesState == UpdatesState::UpdatesEnabled;
+}
+
+void Compositor::updatesEnabledChanged()
+{
+    /* This is a stub virtual function */
+    log_debug("ignoring: updates enabled change");
+}
+
+void Compositor::updateInternallyCacheUpdatesEnabled(bool updatesEnabled)
+{
+    UpdatesState updatesState = updatesEnabled ? UpdatesState::UpdatesEnabled : UpdatesState::UpdatesDisabled;
+    if (m_updatesState != updatesState) {
+        m_updatesState = updatesState;
+        log_debug("updates state: " << m_updatesState);
+        updatesEnabledChanged();
+    }
+}
+
+DBusMessage *Compositor::handleUpdatesEnabledMethodCallMessage(DBusMessage *methodCallMessage)
+{
+    /* Note: We always need to react to updatesEnabled changes. If there
+     *       any problems, the safest thing we can do is to: Act as if
+     *       updates were disabled and always send a reply message to
+     *       unblock mce side state machinery.
+     */
+    dbus_bool_t updatesEnabled = false;
+    if (!parseArgumentsFromDbusMessage(methodCallMessage, DBUS_TYPE_BOOLEAN, &updatesEnabled, DBUS_TYPE_INVALID))
+        log_err("updates enabled parse error");
+    updateInternallyCacheUpdatesEnabled(updatesEnabled);
+    return dbus_message_new_method_return(methodCallMessage);
+}
+
+DBusMessage *Compositor::handleTopmostWindowPidHandlerMethodCallMessage(DBusMessage *methodCallMessage)
+{
+    /* Note: Since topmostWindowPid we report never changes, there is
+     *       no need to implement COMPOSITOR_SIGNAL_TOPMOST_WINDOW_PID_CHANGED
+     *       signal broadcasting.
+     */
+    DBusMessage *replyMessage = dbus_message_new_method_return(methodCallMessage);
+    dbus_int32_t pidAsInt32 = getpid();
+    dbus_message_append_args(replyMessage, DBUS_TYPE_INT32, &pidAsInt32, DBUS_TYPE_INVALID);
+    return replyMessage;
+}
+
+DBusMessage *Compositor::handleIntrospectMethodCallMessage(DBusMessage *methodCallMessage)
+{
+    static const char *xmlDataString =
+    "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+    "\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+    "<node>\n"
+    "  <interface name=\"org.nemomobile.compositor\">\n"
+    "    <method name=\"setUpdatesEnabled\">\n"
+    "      <arg direction=\"in\" type=\"b\" name=\"enabled\"/>\n"
+    "    </method>\n"
+    "    <method name=\"privateTopmostWindowProcessId\">\n"
+    "      <arg direction=\"out\" type=\"i\" name=\"pid\"/>\n"
+    "    </method>\n"
+    "    <signal name=\"privateTopmostWindowProcessIdChanged\">\n"
+    "      <arg type=\"i\" name=\"pid\"/>\n"
+    "    </signal>\n"
+    "  </interface>\n"
+    "  <interface name=\"org.freedesktop.DBus.Introspectable\">\n"
+    "    <method name=\"Introspect\">\n"
+    "      <arg name=\"xml_data\" type=\"s\" direction=\"out\"/>\n"
+    "    </method>\n"
+    "  </interface>\n"
+    "</node>\n";
+    DBusMessage *replyMessage = dbus_message_new_method_return(methodCallMessage);
+    dbus_message_append_args(replyMessage, DBUS_TYPE_STRING, &xmlDataString, DBUS_TYPE_INVALID);
+    return replyMessage;
+}
+
+bool Compositor::compositorNameOwned() const
+{
+    return m_compositorNameOwned;
+}
+
+void Compositor::updateInternallyCachedCompositorOwned(bool compositorNameOwned)
+{
+    if (m_compositorNameOwned != compositorNameOwned) {
+        m_compositorNameOwned = compositorNameOwned;
+        log_debug("m_compositorNameOwned: " << m_compositorNameOwned);
+        if (m_compositorNameOwned) {
+            evaluateCompositorNameOwnerReplacingAllowed();
         } else {
             log_debug("compositor handoff done; exiting");
             m_eventLoop->exit();
@@ -480,775 +947,644 @@ Compositor::updateCompositorOwned(bool owned)
     }
 }
 
-/* ========================================================================= *
- * mceAvailable
- * ========================================================================= */
-
-void
-Compositor::updateMceAvailable(bool available)
+void Compositor::handleCompositorNameLostSignalFromDbusDaemon(DBusMessage *signalMessage)
 {
-    if (m_mceAvailable != available) {
-        m_mceAvailable = available;
-
-        log_debug("m_mceAvailable: " << m_mceAvailable);
-
-        if (m_mceAvailable) {
-            // NB: getting updatesEnabled in sync is handled by mce
-            displayStateQuery();
-            blankPreventAllowedQuery();
-        } else {
-            /* Stop blank prevent ping-pong */
-            updateBlankPreventAllowed(false);
+    const char *dbusName = 0;
+    if (parseArgumentsFromDbusMessage(signalMessage, DBUS_TYPE_STRING, &dbusName, DBUS_TYPE_INVALID)) {
+        log_debug("name lost: " << dbusName);
+        if (stringsAreEqual(dbusName, COMPOSITOR_SERVICE)) {
+            updateInternallyCachedCompositorOwned(false);
         }
     }
 }
 
-void
-Compositor::updateMceNameOwner(const char *owner)
+void Compositor::handleCompositorNameAcquiredSignalFromDbusDaemon(DBusMessage *signalMessage)
 {
-    if (owner && !*owner)
-        owner = nullptr;
-
-    if (!equal(m_mceNameOwner, owner)) {
-        log_debug("m_mceNameOwner: "
-                  << stringRepr(m_mceNameOwner) << " ->"
-                  << stringRepr(owner));
-
-        /* If we ever see handoff from one owner to another, it needs
-         * to be handled as: old_owner -> no_owner -> new_owner.
-         */
-
-        free(m_mceNameOwner);
-        m_mceNameOwner = nullptr;
-        updateMceAvailable(false);
-
-        if (owner) {
-            m_mceNameOwner = strdup(owner);
-            updateMceAvailable(true);
+    const char *dbusName = 0;
+    if (parseArgumentsFromDbusMessage(signalMessage, DBUS_TYPE_STRING, &dbusName, DBUS_TYPE_INVALID)) {
+        log_debug("name acquired: " << dbusName);
+        if (stringsAreEqual(dbusName, COMPOSITOR_SERVICE)) {
+            updateInternallyCachedCompositorOwned(true);
         }
     }
 }
 
-DBusMessage *
-Compositor::mceNameOwnerHandler(DBusMessage *msg)
+bool Compositor::sendCompositorNameOwnershipRequestToDbusDaemon()
 {
-    const char *name = 0;
-    const char *prev = 0;
-    const char *curr = 0;
-
-    if (dbushelper_parse_args(msg,
-                              DBUS_TYPE_STRING, &name,
-                              DBUS_TYPE_STRING, &prev,
-                              DBUS_TYPE_STRING, &curr,
-                              DBUS_TYPE_INVALID)) {
-        if (equal(name, MCE_SERVICE))
-            updateMceNameOwner(curr);
-    }
-
-    return nullptr;
-}
-
-void
-Compositor::mceNameOwnerReply(DBusPendingCall *pc, void *aptr)
-{
-    Compositor  *self = static_cast<Compositor*>(aptr);
-    DBusMessage *rsp  = 0;
-
-    if ((rsp = dbushelper_steal_reply(pc))) {
-        const char *curr = 0;
-        if (dbushelper_parse_args(rsp,
-                                  DBUS_TYPE_STRING, &curr,
-                                  DBUS_TYPE_INVALID)) {
-            self->updateMceNameOwner(curr);
-        }
-        dbus_message_unref(rsp);
-    }
-}
-
-void
-Compositor::mceNameOwnerQuery()
-{
-    const char *arg = MCE_SERVICE;
-    dbushelper_send(m_systemBus,
-                    DBUS_SERVICE_DBUS,
-                    DBUS_PATH_DBUS,
-                    DBUS_INTERFACE_DBUS,
-                    "GetNameOwner",
-                    mceNameOwnerReply,
-                    static_cast<void *>(this), 0, 0,
-                    DBUS_TYPE_STRING, &arg,
-                    DBUS_TYPE_INVALID);
-}
-
-/* ========================================================================= *
- * DisplayState
- * ========================================================================= */
-
-void
-Compositor::updateDisplayState(const char *state)
-{
-    DisplayState prev = m_displayState;
-
-    if (!strcmp(state, MCE_DISPLAY_ON_STRING))
-        m_displayState = DisplayState::On;
-    else if (!strcmp(state, MCE_DISPLAY_DIM_STRING))
-        m_displayState = DisplayState::Dim;
-    else if (!strcmp(state, MCE_DISPLAY_OFF_STRING))
-        m_displayState = DisplayState::Off;
-    else
-        m_displayState = DisplayState::Unknown;
-
-    if (prev != m_displayState) {
-        log_debug("display state: " << m_displayState << " " << state);
-        displayStateChanged();
-    }
-}
-
-DBusMessage *
-Compositor::displayStateHandler(DBusMessage *msg)
-{
-    const char *arg = 0;
-
-    if (dbushelper_parse_args(msg,
-                              DBUS_TYPE_STRING, &arg,
-                              DBUS_TYPE_INVALID)) {
-        updateDisplayState(arg);
-    }
-
-    return nullptr;
-}
-
-void
-Compositor::displayStateReply(DBusPendingCall *pc, void *aptr)
-{
-    Compositor  *self = static_cast<Compositor*>(aptr);
-    DBusMessage *rsp  = 0;
-
-    if ((rsp = dbushelper_steal_reply(pc))) {
-        self->displayStateHandler(rsp);
-        dbus_message_unref(rsp);
-    }
-}
-
-void
-Compositor::displayStateQuery()
-{
-    dbushelper_send(m_systemBus,
-                    MCE_SERVICE,
-                    MCE_REQUEST_PATH,
-                    MCE_REQUEST_IF,
-                    MCE_DISPLAY_STATUS_GET,
-                    displayStateReply,
-                    static_cast<void *>(this), 0, 0,
-                    DBUS_TYPE_INVALID);
-}
-
-/* ========================================================================= *
- * blankPreventAllowed
- * ========================================================================= */
-
-void
-Compositor::terminateBlankingPause()
-{
-    dbushelper_send(m_systemBus,
-                    MCE_SERVICE,
-                    MCE_REQUEST_PATH,
-                    MCE_REQUEST_IF,
-                    MCE_CANCEL_PREVENT_BLANK_REQ,
-                    0, 0, 0, 0,
-                    DBUS_TYPE_INVALID);
-}
-
-void
-Compositor::requestBlankingPause()
-{
-    dbushelper_send(m_systemBus,
-                    MCE_SERVICE,
-                    MCE_REQUEST_PATH,
-                    MCE_REQUEST_IF,
-                    MCE_PREVENT_BLANK_REQ,
-                    0, 0, 0, 0,
-                    DBUS_TYPE_INVALID);
-}
-
-void
-Compositor::evaluateBlankingPause()
-{
-    /* MCE allows 60 second renew delay. Note that there is no named
-     * constant for this value. */
-    const int renewDelay = 60 * 1000; // [ms]
-
-    bool preventBlanking = m_blankPreventWanted && m_blankPreventAllowed;
-
-    if (preventBlanking) {
-        if (!m_blankPreventTimer) {
-            log_debug("blanking pause: start");
-            requestBlankingPause();
-            m_blankPreventTimer =
-                m_eventLoop->createTimer(renewDelay,
-                                         [this]() {
-                                             log_debug("blanking pause: renew");
-                                             requestBlankingPause();
-                                         });
-        }
+    DBusError dbusError = DBUS_ERROR_INIT;
+    unsigned flags = DBUS_NAME_FLAG_DO_NOT_QUEUE | DBUS_NAME_FLAG_REPLACE_EXISTING;
+    int returnCode = dbus_bus_request_name(m_systemBusConnection, COMPOSITOR_SERVICE, flags, &dbusError);
+    if (dbus_error_is_set(&dbusError)) {
+        log_err("failed to obtain dbus name:" << dbusError.name << ": " <<  dbusError.message);
+    } else if (returnCode != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
+        log_err("failed to obtain dbus name");
     } else {
-        if (m_blankPreventTimer) {
-            log_debug("blanking pause: stop");
-            m_eventLoop->cancelTimer(m_blankPreventTimer),
-                m_blankPreventTimer = 0;
-            terminateBlankingPause();
+        updateInternallyCachedCompositorOwned(true);
+        addSystemBusMatches();
+        subscribeSystemdNotifications();
+        sendMceNameOwnerQueryToDbusDaemon();
+        dsmeNameOwnerQuery();
+        targetUnitPropsQuery();
+    }
+    dbus_error_free(&dbusError);
+    return compositorNameOwned();
+}
+
+void Compositor::evaluateCompositorNameOwnerReplacingAllowed(void)
+{
+    if (!m_replacingCompositorNameOwnerAllowed && compositorNameOwned() && targetUnitActive()) {
+        DBusError dbusError = DBUS_ERROR_INIT;
+        unsigned flags = (DBUS_NAME_FLAG_DO_NOT_QUEUE |
+                          DBUS_NAME_FLAG_ALLOW_REPLACEMENT);
+        int returnCode = dbus_bus_request_name(m_systemBusConnection, COMPOSITOR_SERVICE, flags, &dbusError);
+        if (dbus_error_is_set(&dbusError)) {
+            log_err("failed to adjust dbus name:" << dbusError.name << ": " <<  dbusError.message);
+        } else if (returnCode != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER && returnCode != DBUS_REQUEST_NAME_REPLY_ALREADY_OWNER) {
+            log_err("failed to adjust dbus name: returnCode=" << returnCode);
+        } else {
+            log_debug("compositor handoff allowed");
+            m_replacingCompositorNameOwnerAllowed = true;
         }
+        dbus_error_free(&dbusError);
+    }
+    if (targetUnitActive() && !m_replacingCompositorNameOwnerAllowed) {
+        log_err("compositor handoff not possible; exit immediately");
+        m_eventLoop->exit();
     }
 }
 
-void
-Compositor::setBlankPreventWanted(bool wanted)
+void Compositor::onBatteryEmpty()
 {
-    if (m_blankPreventWanted != wanted) {
-        m_blankPreventWanted = wanted;
-        log_debug("m_blankPreventWanted: " << m_blankPreventWanted);
-        evaluateBlankingPause();
-    }
-}
-
-void
-Compositor::updateBlankPreventAllowed(bool allowed)
-{
-    if (m_blankPreventAllowed != allowed) {
-        m_blankPreventAllowed = allowed;
-        log_debug("m_blankPreventAllowed: " << m_blankPreventAllowed);
-        evaluateBlankingPause();
-    }
-}
-
-DBusMessage *
-Compositor::blankPreventAllowedHandler(DBusMessage *msg)
-{
-    dbus_bool_t arg = false;
-
-    if (dbushelper_parse_args(msg,
-                              DBUS_TYPE_BOOLEAN, &arg,
-                              DBUS_TYPE_INVALID)) {
-        updateBlankPreventAllowed(arg);
-    }
-
-    return nullptr;
-}
-
-void
-Compositor::blankPreventAllowedReply(DBusPendingCall *pc, void *aptr)
-{
-    Compositor  *self = static_cast<Compositor*>(aptr);
-    DBusMessage *rsp  = 0;
-
-    if ((rsp = dbushelper_steal_reply(pc))) {
-        self->blankPreventAllowedHandler(rsp);
-        dbus_message_unref(rsp);
-    }
-}
-
-void
-Compositor::blankPreventAllowedQuery()
-{
-    dbushelper_send(m_systemBus,
-                    MCE_SERVICE,
-                    MCE_REQUEST_PATH,
-                    MCE_REQUEST_IF,
-                    MCE_PREVENT_BLANK_ALLOWED_GET,
-                    blankPreventAllowedReply,
-                    static_cast<void *>(this), 0, 0,
-                    DBUS_TYPE_INVALID);
-}
-
-/* ========================================================================= *
- * UpdatesEnabled
- * ========================================================================= */
-
-void
-Compositor::updateUpdatesEnabled(bool state)
-{
-    int prev = m_updatesEnabled;
-    m_updatesEnabled = state;
-
-    if (prev != m_updatesEnabled) {
-        log_debug("updates enabled: " << m_updatesEnabled);
-        updatesEnabledChanged();
-    }
-}
-
-DBusMessage *
-Compositor::updatesEnabledHandler(DBusMessage *msg)
-{
-    dbus_bool_t arg = false;
-
-    /* Note: We always need to react to updatesEnabled changes. If there
-     *       any problems, the safest thing we can do is to: Act as if
-     *       updates were disabled and always send a reply message to
-     *       unblock mce side state machinery.
+    /* Emitted on entry to battery empty state.
+     *
+     * Device will shut down soon after this unless
+     * charger is connected.
      */
-
-    if (!dbushelper_parse_args(msg,
-                               DBUS_TYPE_BOOLEAN, &arg,
-                               DBUS_TYPE_INVALID)) {
-        log_err("updates enabled parse error");
-    }
-
-    updateUpdatesEnabled(arg);
-
-    return dbus_message_new_method_return(msg);
+    /* This is a stub virtual function */
+    log_debug("ignoring: battery empty notification");
 }
 
-DBusMessage *
-Compositor::nameLostHandler(DBusMessage *msg)
+void Compositor::onThermalShutdown()
 {
-    const char *arg = 0;
+    /* Emitted on entry to critical thermal state.
+     *
+     * Device will shut down soon after this unless
+     * it gets significantly cooler.
+     */
+    /* This is a stub virtual function */
+    log_debug("ignoring: critical thermal state notification");
+}
 
-    if (dbushelper_parse_args(msg,
-                              DBUS_TYPE_STRING, &arg,
-                              DBUS_TYPE_INVALID)) {
-        log_debug("name lost: " << arg);
-        if (equal(arg, COMPOSITOR_SERVICE)) {
-            updateCompositorOwned(false);
+void Compositor::onSaveUnsavedData()
+{
+    /* Apps have 2 seconds or so to save state
+     * before shutdown commences.
+     */
+    /* This is a stub virtual function */
+    log_debug("ignoring: save data notification");
+}
+
+void Compositor::onShutdown()
+{
+    /* Emitted on entry to shudown/reboot dsme state.
+     *
+     * Shutdown is imminent.
+     */
+    /* This is a stub virtual function */
+    log_debug("ignoring: shutdown");
+}
+
+void Compositor::handleBatteryEmptySignalFromDsme(DBusMessage *signalMessage)
+{
+    if (parseArgumentsFromDbusMessage(signalMessage, DBUS_TYPE_INVALID))
+        onBatteryEmpty();
+}
+
+void Compositor::handleSaveUnsavedDataSignalFromDsme(DBusMessage *signalMessage)
+{
+    if (parseArgumentsFromDbusMessage(signalMessage, DBUS_TYPE_INVALID))
+        onSaveUnsavedData();
+}
+
+void Compositor::handleShutdownSignalFromDsme(DBusMessage *signalMessage)
+{
+    if (parseArgumentsFromDbusMessage(signalMessage, DBUS_TYPE_INVALID))
+        onShutdown();
+}
+
+void Compositor::handleThermalShutdownSignalFromDsme(DBusMessage *signalMessage)
+{
+    if (parseArgumentsFromDbusMessage(signalMessage, DBUS_TYPE_INVALID))
+        onThermalShutdown();
+}
+
+void Compositor::sendShutdownRequestToDsme() const
+{
+    if (getppid() != 1) {
+        log_warning("shutdown requested while debugging; exit");
+        m_eventLoop->exit();
+    } else if (!dsmeIsRunning()) {
+        log_warning("shutdown requested while dsme is not running");
+    } else {
+        log_debug("sending shutdown request to dsme");
+        sendDbusMethodCallMessage(m_systemBusConnection, dsme_service, dsme_req_path, dsme_req_interface,
+                                  dsme_req_shutdown, 0, 0, 0, 0, DBUS_TYPE_INVALID);
+    }
+}
+
+void Compositor::sendRebootRequestToDsme() const
+{
+    if (getppid() != 1) {
+        log_warning("reboot requested while debugging; exit");
+        m_eventLoop->exit();
+    } else if (!dsmeIsRunning()) {
+        log_warning("reboot requested while dsme is not running");
+    } else {
+        log_debug("sending reboot request to dsme");
+        sendDbusMethodCallMessage(m_systemBusConnection, dsme_service, dsme_req_path, dsme_req_interface,
+                                  dsme_req_reboot, 0, 0, 0, 0, DBUS_TYPE_INVALID);
+    }
+}
+
+void Compositor::sendPowerupRequestToDsme() const
+{
+    if (getppid() != 1) {
+        log_warning("powerup requested while debugging; exit");
+        m_eventLoop->exit();
+    } else if (!dsmeIsRunning()) {
+        log_warning("powerup requested while dsme is not running");
+    } else {
+        log_debug("sending powerup request to dsme");
+        sendDbusMethodCallMessage(m_systemBusConnection, dsme_service, dsme_req_path, dsme_req_interface,
+                                  dsme_req_powerup, 0, 0, 0, 0, DBUS_TYPE_INVALID);
+    }
+}
+
+bool Compositor::shuttingDownToPowerOff() const
+{
+    return dsmeState() == DSME_STATE_SHUTDOWN;
+}
+
+bool Compositor::shuttingDownToReboot() const
+{
+    return dsmeState() == DSME_STATE_REBOOT;
+}
+
+bool Compositor::shuttingDown() const
+{
+    return shuttingDownToPowerOff() || shuttingDownToReboot();
+}
+
+Compositor::DsmeState Compositor::dsmeState() const
+{
+    return m_dsmeState;
+}
+
+void Compositor::dsmeStateChanged()
+{
+    /* This is a stub virtual function */
+    log_debug("ignoring: dsme state change");
+}
+
+void Compositor::updateInternallyCacheDsmeState(DsmeState dsmeState)
+{
+    if (m_dsmeState != dsmeState) {
+        log_debug("m_dsmeState: "
+                  << lookupDsmeStateName(m_dsmeState)
+                  << " -> "
+                  << lookupDsmeStateName(dsmeState));
+        m_dsmeState = dsmeState;
+        dsmeStateChanged();
+    }
+}
+
+void Compositor::handleDsmeStateMessageFromDsme(DBusMessage *signalOrReplyMessage)
+{
+    const char *stateName = 0;
+    if (parseArgumentsFromDbusMessage(signalOrReplyMessage, DBUS_TYPE_STRING, &stateName, DBUS_TYPE_INVALID))
+        updateInternallyCacheDsmeState(lookupDsmeStateValue(stateName));
+}
+
+void Compositor::handleDsmeStateSignalFromDsme(DBusMessage *signalMessage)
+{
+    handleDsmeStateMessageFromDsme(signalMessage);
+}
+
+void Compositor::handleDsmeStateReplyFromDsme(DBusPendingCall *pendingCall, void *userDataPointer)
+{
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    DBusMessage *replyMessage = 0;
+    if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+        thisAsUserDataPointer->handleDsmeStateMessageFromDsme(replyMessage);
+        dbus_message_unref(replyMessage);
+    }
+}
+
+void Compositor::sendDsmeStateQuerytoDsme()
+{
+    sendDbusMethodCallMessage(m_systemBusConnection, dsme_service, dsme_req_path, dsme_req_interface,
+                              dsme_get_state, handleDsmeStateReplyFromDsme,
+                              static_cast<void *>(this), 0, 0, DBUS_TYPE_INVALID);
+}
+
+bool Compositor::dsmeIsRunning() const
+{
+    return m_dsmeIsRunning;
+}
+
+void Compositor::updateInternallyCachedDsmeIsRunning(bool dsmeIsRunning)
+{
+    if (m_dsmeIsRunning != dsmeIsRunning) {
+        m_dsmeIsRunning = dsmeIsRunning;
+        log_debug("m_dsmeIsRunning: " << m_dsmeIsRunning);
+        if (m_dsmeIsRunning) {
+            sendDsmeStateQuerytoDsme();
+        } else {
+            updateInternallyCacheDsmeState(DSME_STATE_NOT_SET);
         }
     }
-
-    return nullptr;
 }
 
-DBusMessage *
-Compositor::nameAcquiredHandler(DBusMessage *msg)
+void Compositor::updateInternallyCachedDsmeNameOwner(const char *dsmeNameOwner)
 {
-    const char *arg = 0;
-
-    if (dbushelper_parse_args(msg,
-                              DBUS_TYPE_STRING, &arg,
-                              DBUS_TYPE_INVALID)) {
-        log_debug("name acquired: " << arg);
-        if (equal(arg, COMPOSITOR_SERVICE)) {
-            updateCompositorOwned(true);
+    if (dsmeNameOwner && !*dsmeNameOwner)
+        dsmeNameOwner = nullptr;
+    if (!stringsAreEqual(m_dsmeNameOwner, dsmeNameOwner)) {
+        log_debug("m_dsmeNameOwner: "
+                  << stringRepr(m_dsmeNameOwner) << " ->"
+                  << stringRepr(dsmeNameOwner));
+        /* If we ever see handoff from one owner to another, it needs
+         * to be handled as: oldOwner -> noOwner -> newOwner.
+         */
+        free(m_dsmeNameOwner);
+        m_dsmeNameOwner = nullptr;
+        updateInternallyCachedDsmeIsRunning(false);
+        if (dsmeNameOwner) {
+            m_dsmeNameOwner = strdup(dsmeNameOwner);
+            updateInternallyCachedDsmeIsRunning(true);
         }
     }
-
-    return nullptr;
 }
 
-/* ========================================================================= *
- * targetUnitActive
- * ========================================================================= */
+void Compositor::dsmeNameOwnerHandler(DBusMessage *signalMessage)
+{
+    const char *dbusName = 0;
+    const char *previousNameOwner = 0;
+    const char *currentNameOwner = 0;
+    if (parseArgumentsFromDbusMessage(signalMessage, DBUS_TYPE_STRING, &dbusName, DBUS_TYPE_STRING, &previousNameOwner,
+                              DBUS_TYPE_STRING, &currentNameOwner, DBUS_TYPE_INVALID)) {
+        if (stringsAreEqual(dbusName, dsme_service))
+            updateInternallyCachedDsmeNameOwner(currentNameOwner);
+    }
+}
 
-bool
-Compositor::targetUnitActive() const
+void Compositor::dsmeNameOwnerReply(DBusPendingCall *pendingCall, void *userDataPointer)
+{
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    DBusMessage *replyMessage = 0;
+    if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+        const char *currentNameOwner = 0;
+        if (parseArgumentsFromDbusMessage(replyMessage, DBUS_TYPE_STRING, &currentNameOwner, DBUS_TYPE_INVALID))
+            thisAsUserDataPointer->updateInternallyCachedDsmeNameOwner(currentNameOwner);
+        dbus_message_unref(replyMessage);
+    }
+}
+
+void Compositor::dsmeNameOwnerQuery()
+{
+    const char *dbusName = dsme_service;
+    sendDbusMethodCallMessage(m_systemBusConnection, DBUS_SERVICE_DBUS, DBUS_PATH_DBUS,
+                              DBUS_INTERFACE_DBUS, "GetNameOwner", dsmeNameOwnerReply,
+                              static_cast<void *>(this), 0, 0, DBUS_TYPE_STRING, &dbusName,
+                              DBUS_TYPE_INVALID);
+}
+
+bool Compositor::targetUnitActive() const
 {
     return m_targetUnitActive;
 }
 
-void
-Compositor::updateTargetUnitActive(bool active)
+void Compositor::updateTargetUnitActive(bool targetUnitActive)
 {
-    if (m_targetUnitActive != active) {
-        m_targetUnitActive = active;
+    if (m_targetUnitActive != targetUnitActive) {
+        m_targetUnitActive = targetUnitActive;
         log_debug("m_targetUnitActive: " << m_targetUnitActive);
-        evaluateNameReplacement();
+        evaluateCompositorNameOwnerReplacingAllowed();
     }
 }
 
-void
-Compositor::evaluateTargetUnitActive()
+void Compositor::evaluateTargetUnitActive()
 {
-    bool active = false;
-    const char *activeState = m_targetUnitProps->activeState();
-    if (equal(activeState, "active")) {
-        const char *subState = m_targetUnitProps->subState();
-        active = equal(subState, "running") || equal(subState, "mounted");
+    bool targetUnitActive = false;
+    const char *activeState = m_targetUnitProperties->activeState();
+    if (stringsAreEqual(activeState, "active")) {
+        const char *subState = m_targetUnitProperties->subState();
+        targetUnitActive = stringsAreEqual(subState, "running") || stringsAreEqual(subState, "mounted");
     }
-    updateTargetUnitActive(active);
+    updateTargetUnitActive(targetUnitActive);
 }
 
-DBusMessage *
-Compositor::targetUnitPropsHandler(DBusMessage *msg)
+void Compositor::targetUnitPropsHandler(DBusMessage *signalOrReplyMessage)
 {
-    const char *interface = 0;
-    DBusMessageIter iter;
-    if (dbus_message_iter_init(msg, &iter)) {
-        if (dbushelper_get_string(&iter, &interface)) {
-            log_debug("property change: " << interface);
-            if (equal(interface, SYSTEMD_UNIT_INTERFACE)) {
-                m_targetUnitProps->updateFrom(&iter);
+    const char *interfaceName = 0;
+    DBusMessageIter messageIter;
+    if (dbus_message_iter_init(signalOrReplyMessage, &messageIter)) {
+        if (parseStringValueFromMessageIter(&messageIter, &interfaceName)) {
+            log_debug("property change: " << interfaceName);
+            if (stringsAreEqual(interfaceName, SYSTEMD_UNIT_INTERFACE)) {
+                m_targetUnitProperties->updateFromMessageIter(&messageIter);
                 evaluateTargetUnitActive();
             }
         }
     }
-    return nullptr;
 }
 
-void
-Compositor::targetUnitPropsReply(DBusPendingCall *pc, void *aptr)
+void Compositor::targetUnitPropsReply(DBusPendingCall *pendingCall, void *userDataPointer)
 {
     log_debug("property reply");
-
-    Compositor  *self = static_cast<Compositor*>(aptr);
-    DBusMessage *rsp  = 0;
-    if ((rsp = dbushelper_steal_reply(pc))) {
-        DBusMessageIter iter;
-        if (dbus_message_iter_init(rsp, &iter)) {
-            self->m_targetUnitProps->updateFrom(&iter);
-            self->evaluateTargetUnitActive();
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    DBusMessage *replyMessage = 0;
+    if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+        DBusMessageIter messageIter;
+        if (dbus_message_iter_init(replyMessage, &messageIter)) {
+            thisAsUserDataPointer->m_targetUnitProperties->updateFromMessageIter(&messageIter);
+            thisAsUserDataPointer->evaluateTargetUnitActive();
         }
-        dbus_message_unref(rsp);
+        dbus_message_unref(replyMessage);
     }
 }
 
-void
-Compositor::targetUnitPropsQuery()
+void Compositor::targetUnitPropsQuery()
 {
     log_debug("property query");
-
-    const char *arg = SYSTEMD_UNIT_INTERFACE;
-    dbushelper_send(m_systemBus,
-                    SYSTEMD_SERVICE,
-                    SYSTEMD_TARGET_UNIT_PATH,
-                    DBUS_PROPERTIES_INTERFACE,
-                    DBUS_PROPERTIES_METHOD_GET_ALL,
-                    targetUnitPropsReply,
-                    static_cast<void *>(this), 0, 0,
-                    DBUS_TYPE_STRING, &arg,
-                    DBUS_TYPE_INVALID);
+    const char *interfaceName = SYSTEMD_UNIT_INTERFACE;
+    sendDbusMethodCallMessage(m_systemBusConnection, SYSTEMD_SERVICE, SYSTEMD_TARGET_UNIT_PATH,
+                              DBUS_PROPERTIES_INTERFACE, DBUS_PROPERTIES_METHOD_GET_ALL,
+                              targetUnitPropsReply, static_cast<void *>(this), 0, 0,
+                              DBUS_TYPE_STRING, &interfaceName, DBUS_TYPE_INVALID);
 }
 
-/* ========================================================================= *
- * D-Bus Connection
- * ========================================================================= */
-
-Compositor::Handler Compositor::s_systemBusHandlers[] =
+void Compositor::subscribeSystemdNotifications() const
 {
-    /* Signal handlers */
-    {
-        &Compositor::mceNameOwnerHandler,
-        nullptr,
-        DBUS_PATH_DBUS,
-        DBUS_INTERFACE_DBUS,
-        "NameOwnerChanged",
-        MCE_SERVICE,
-        nullptr,
-        nullptr,
-        false,
-    },
-    {
-        &Compositor::nameLostHandler,
-        nullptr,
-        DBUS_PATH_DBUS,
-        DBUS_INTERFACE_DBUS,
-        "NameLost",
-        nullptr,
-        nullptr,
-        nullptr,
-        true,
-    },
-    {
-        &Compositor::nameAcquiredHandler,
-        nullptr,
-        DBUS_PATH_DBUS,
-        DBUS_INTERFACE_DBUS,
-        "NameAcquired",
-        nullptr,
-        nullptr,
-        nullptr,
-        true,
-    },
-    {
-        &Compositor::displayStateHandler,
-        nullptr,
-        MCE_SIGNAL_PATH,
-        MCE_SIGNAL_IF,
-        MCE_DISPLAY_SIG,
-        nullptr,
-        nullptr,
-        nullptr,
-        false,
-    },
-    {
-        &Compositor::blankPreventAllowedHandler,
-        nullptr,
-        MCE_SIGNAL_PATH,
-        MCE_SIGNAL_IF,
-        MCE_PREVENT_BLANK_ALLOWED_SIG,
-        nullptr,
-        nullptr,
-        nullptr,
-        false,
-    },
+    log_debug("subscribe: call");
+    sendDbusMethodCallMessage(m_systemBusConnection,
+                              SYSTEMD_SERVICE, SYSTEMD_MANAGER_PATH, SYSTEMD_MANAGER_INTERFACE,
+                              SYSTEMD_MANAGER_METHOD_SUBSCRIBE,
+                              [](DBusPendingCall *pendingCall, void *userDataPointer) {
+                                  (void)userDataPointer;
+                                  DBusMessage *replyMessage = 0;
+                                  if ((replyMessage = getReplyMessageFromPendingCall(pendingCall))) {
+                                      log_debug("subscribe: reply");
+                                      dbus_message_unref(replyMessage);
+                                  }
+                              }, 0, 0, 0, DBUS_TYPE_INVALID);
+}
 
+Compositor::SignalMessageHandler Compositor::s_systemBusSignalHandlers[] =
+{
+    {
+        &Compositor::handleMceNameOwnerSignalFromDbusDaemon,
+        DBUS_PATH_DBUS, DBUS_INTERFACE_DBUS, "NameOwnerChanged",
+        MCE_SERVICE, nullptr, nullptr
+    },
+    {
+        &Compositor::handleCompositorNameLostSignalFromDbusDaemon,
+        DBUS_PATH_DBUS, DBUS_INTERFACE_DBUS, "NameLost",
+        COMPOSITOR_SERVICE, nullptr, nullptr
+    },
+    {
+        &Compositor::handleCompositorNameAcquiredSignalFromDbusDaemon,
+        DBUS_PATH_DBUS, DBUS_INTERFACE_DBUS, "NameAcquired",
+        COMPOSITOR_SERVICE, nullptr, nullptr
+    },
+    {
+        &Compositor::handleDisplayStateSignalFromMce,
+        MCE_SIGNAL_PATH, MCE_SIGNAL_IF, MCE_DISPLAY_SIG,
+        nullptr, nullptr, nullptr
+    },
+    {
+        &Compositor::handleChargerStateSignalFromMce,
+        MCE_SIGNAL_PATH, MCE_SIGNAL_IF, MCE_CHARGER_STATE_SIG,
+        nullptr, nullptr, nullptr
+    },
+    {
+        &Compositor::handleBatteryStatusSignalFromMce,
+        MCE_SIGNAL_PATH, MCE_SIGNAL_IF, MCE_BATTERY_STATUS_SIG,
+        nullptr, nullptr, nullptr
+    },
+    {
+        &Compositor::handlebatteryLevelSignalFromMce,
+        MCE_SIGNAL_PATH, MCE_SIGNAL_IF, MCE_BATTERY_LEVEL_SIG,
+        nullptr, nullptr, nullptr
+    },
+    {
+        &Compositor::handleBlankPreventAllowedSignalFromMce,
+        MCE_SIGNAL_PATH, MCE_SIGNAL_IF, MCE_PREVENT_BLANK_ALLOWED_SIG,
+        nullptr, nullptr, nullptr
+    },
     {
         &Compositor::targetUnitPropsHandler,
-        nullptr,
-        SYSTEMD_TARGET_UNIT_PATH,
-        DBUS_PROPERTIES_INTERFACE,
-        DBUS_PROPERTIES_SIGNAL_CHANGED,
-        SYSTEMD_UNIT_INTERFACE,
-        nullptr,
-        nullptr,
-        false,
+        SYSTEMD_TARGET_UNIT_PATH, DBUS_PROPERTIES_INTERFACE, DBUS_PROPERTIES_SIGNAL_CHANGED,
+        SYSTEMD_UNIT_INTERFACE, nullptr, nullptr
     },
-
-    /* Method call handlers */
     {
-        &Compositor::updatesEnabledHandler,
-        COMPOSITOR_SERVICE,
-        COMPOSITOR_PATH,
-        COMPOSITOR_IFACE,
-        COMPOSITOR_SET_UPDATES_ENABLED,
-        nullptr,
-        nullptr,
-        nullptr,
-        false,
+        &Compositor::dsmeNameOwnerHandler,
+        DBUS_PATH_DBUS, DBUS_INTERFACE_DBUS, "NameOwnerChanged",
+        dsme_service, nullptr, nullptr
+    },
+    {
+        &Compositor::handleBatteryEmptySignalFromDsme,
+        dsme_sig_path, dsme_sig_interface, dsme_battery_empty_ind,
+        nullptr, nullptr, nullptr
+    },
+    {
+        &Compositor::handleSaveUnsavedDataSignalFromDsme,
+        dsme_sig_path, dsme_sig_interface, dsme_save_unsaved_data_ind,
+        nullptr, nullptr, nullptr
+    },
+    {
+        &Compositor::handleShutdownSignalFromDsme,
+        dsme_sig_path, dsme_sig_interface, dsme_shutdown_ind,
+        nullptr, nullptr, nullptr
+    },
+    {
+        &Compositor::handleThermalShutdownSignalFromDsme,
+        dsme_sig_path, dsme_sig_interface, dsme_thermal_shutdown_ind,
+        nullptr, nullptr, nullptr
+    },
+    {
+        &Compositor::handleDsmeStateSignalFromDsme,
+        dsme_sig_path, dsme_sig_interface, dsme_state_change_ind,
+        nullptr, nullptr, nullptr
     },
     /* Sentinel */
     {
         nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        nullptr,
-        false,
+        nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr
     }
 };
 
-DBusHandlerResult
-Compositor::systemBusFilter(DBusConnection *con, DBusMessage *msg, void *aptr)
+Compositor::MethodCallMessageHandler Compositor::s_systemBusMethodCallHandlers[] = {
+    {
+        &Compositor::handleUpdatesEnabledMethodCallMessage,
+        COMPOSITOR_SERVICE, COMPOSITOR_PATH, COMPOSITOR_INTERFACE, COMPOSITOR_METHOD_SET_UPDATES_ENABLED
+    },
+    {
+        &Compositor::handleTopmostWindowPidHandlerMethodCallMessage,
+        COMPOSITOR_SERVICE, COMPOSITOR_PATH, COMPOSITOR_INTERFACE, COMPOSITOR_METHOD_GET_TOPMOST_WINDOW_PID
+    },
+    {
+        &Compositor::handleIntrospectMethodCallMessage,
+        COMPOSITOR_SERVICE, COMPOSITOR_PATH, "org.freedesktop.DBus.Introspectable", "Introspect"
+    },
+    /* Sentinel */
+    {
+        nullptr,
+        nullptr, nullptr, nullptr, nullptr
+    }
+};
+
+DBusHandlerResult Compositor::systemBusMessageFilter(DBusConnection *dbusConnection, DBusMessage *dbusMessage, void *userDataPointer)
 {
-    Compositor *self = static_cast<Compositor*>(aptr);
-    bool handled = false;
-    int msgType = dbus_message_get_type(msg);
-    if (msgType == DBUS_MESSAGE_TYPE_METHOD_CALL || msgType == DBUS_MESSAGE_TYPE_SIGNAL) {
-        const char *interface = dbus_message_get_interface(msg);
-        const char *object    = dbus_message_get_path(msg);
-        const char *member    = dbus_message_get_member(msg);
-        if (interface && object && member) {
-            const char *service = nullptr;
-            if (msgType == DBUS_MESSAGE_TYPE_METHOD_CALL)
-                service = dbus_message_get_destination(msg) ?: "";
-            for (size_t i = 0; !handled && s_systemBusHandlers[i].callback; ++i) {
-                if (!equal(s_systemBusHandlers[i].service, service) ||
-                    !equal_or_dontcare(s_systemBusHandlers[i].interface, interface) ||
-                    !equal_or_dontcare(s_systemBusHandlers[i].object, object) ||
-                    !equal_or_dontcare(s_systemBusHandlers[i].member, member))
+    Compositor *thisAsUserDataPointer = static_cast<Compositor*>(userDataPointer);
+    bool messageWasHandled = false;
+    int msgType = dbus_message_get_type(dbusMessage);
+    if (msgType == DBUS_MESSAGE_TYPE_METHOD_CALL) {
+        const char *serviceName = dbus_message_get_destination(dbusMessage);
+        const char *objectPath = dbus_message_get_path(dbusMessage);
+        const char *interfaceName = dbus_message_get_interface(dbusMessage);
+        const char *memberName = dbus_message_get_member(dbusMessage);
+        if (serviceName && objectPath && interfaceName && memberName) {
+            for (size_t i = 0; s_systemBusMethodCallHandlers[i].m_methodCallMessageHanderFunction; ++i) {
+                if (!stringsAreEqual(s_systemBusMethodCallHandlers[i].m_serviceName, serviceName)
+                    || !stringsAreEqualOrWeDoNotCare(s_systemBusMethodCallHandlers[i].m_interfaceName, interfaceName)
+                    || !stringsAreEqualOrWeDoNotCare(s_systemBusMethodCallHandlers[i].m_objectPath, objectPath)
+                    || !stringsAreEqualOrWeDoNotCare(s_systemBusMethodCallHandlers[i].m_methodName, memberName))
                     continue;
-                log_debug("handle: " << interface << "." << member << "()");
-                DBusMessage *rsp = (self->*s_systemBusHandlers[i].callback)(msg);
-                if (service) {
-                    handled = true;
-                    if (!dbus_message_get_no_reply(msg)) {
-                        if (!rsp)
-                            rsp = dbus_message_new_error(msg, DBUS_ERROR_FAILED,
-                                                         member);
-                        if (!rsp || !dbus_connection_send(con, rsp, 0))
-                            log_err("failed to send reply");
-                    }
+                log_debug("handle method call: " << interfaceName << "." << memberName << "()");
+                DBusMessage *replyMessage = (thisAsUserDataPointer->*s_systemBusMethodCallHandlers[i].m_methodCallMessageHanderFunction)(dbusMessage);
+                if (!dbus_message_get_no_reply(dbusMessage)) {
+                    if (!replyMessage)
+                        replyMessage = dbus_message_new_error(dbusMessage, DBUS_ERROR_FAILED, memberName);
+                    if (!replyMessage || !dbus_connection_send(dbusConnection, replyMessage, 0))
+                        log_err("failed to send reply");
                 }
-                if (rsp)
-                    dbus_message_unref(rsp);
+                if (replyMessage)
+                    dbus_message_unref(replyMessage);
+                messageWasHandled = true;
+                break;
+            }
+        }
+    } else if (msgType == DBUS_MESSAGE_TYPE_SIGNAL) {
+        const char *objectPath = dbus_message_get_path(dbusMessage);
+        const char *interfaceName = dbus_message_get_interface(dbusMessage);
+        const char *memberName = dbus_message_get_member(dbusMessage);
+        if (objectPath && interfaceName && memberName) {
+            const char *argument0 = nullptr;
+            const char *argument1 = nullptr;
+            const char *argument2 = nullptr;
+            DBusMessageIter messageIter;
+            dbus_message_iter_init(dbusMessage, &messageIter);
+            parseStringArgumentFromMessageIter(&messageIter, &argument0);
+            parseStringArgumentFromMessageIter(&messageIter, &argument1);
+            parseStringArgumentFromMessageIter(&messageIter, &argument2);
+            for (size_t i = 0; s_systemBusSignalHandlers[i].m_signalMessageHanderFunction; ++i) {
+                if (!stringsAreEqualOrWeDoNotCare(s_systemBusSignalHandlers[i].m_interfaceName, interfaceName)
+                    || !stringsAreEqualOrWeDoNotCare(s_systemBusSignalHandlers[i].m_objectPath, objectPath)
+                    || !stringsAreEqualOrWeDoNotCare(s_systemBusSignalHandlers[i].m_signalName, memberName)
+                    || !stringsAreEqualOrWeDoNotCare(s_systemBusSignalHandlers[i].m_argument0, argument0)
+                    || !stringsAreEqualOrWeDoNotCare(s_systemBusSignalHandlers[i].m_argument1, argument1)
+                    || !stringsAreEqualOrWeDoNotCare(s_systemBusSignalHandlers[i].m_argument2, argument2))
+                    continue;
+                log_debug("handle signal: " << interfaceName << "." << memberName << "()");
+                (thisAsUserDataPointer->*s_systemBusSignalHandlers[i].m_signalMessageHanderFunction)(dbusMessage);
             }
         }
     }
-    return (handled
-            ? DBUS_HANDLER_RESULT_HANDLED
-            : DBUS_HANDLER_RESULT_NOT_YET_HANDLED);
+    return messageWasHandled ? DBUS_HANDLER_RESULT_HANDLED : DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
 
-bool
-Compositor::generateMatch(Compositor::Handler &handler, char *buff, size_t size)
+bool Compositor::generateMatchForSignalMessageHandler(Compositor::SignalMessageHandler &signalMessageHandler, char *matchBuffer, size_t matchBufferSize)
 {
-    char interface[64] = "";
-    char object[64] = "";
-    char member[64] = "";
-    char arg0[64] = "";
-    char arg1[64] = "";
-    char arg2[64] = "";
-
-    /* Skip method call handlers */
-    if (handler.service != 0)
-        return false;
-
+    char interfaceName[64] = "";
+    char objectPath[64] = "";
+    char memberName[64] = "";
+    char argument0[64] = "";
+    char argument1[64] = "";
+    char argument2[64] = "";
     /* Skip implicitly sent signals such as NameAcquired/NameLost */
-    if (handler.implicit)
+    if (stringsAreEqual(signalMessageHandler.m_signalName,"NameLost") || stringsAreEqual(signalMessageHandler.m_signalName,"NameAcquired"))
         return false;
-
-    if (handler.interface)
-        snprintf(interface, sizeof interface, ",interface='%s'",
-                 handler.interface);
-
-    if (handler.object)
-        snprintf(object, sizeof object, ",path='%s'",
-                 handler.object);
-
-    if (handler.member)
-        snprintf(member, sizeof member, ",member='%s'",
-                 handler.member);
-
-    if (handler.arg0)
-        snprintf(arg0, sizeof arg0, ",arg0='%s'",
-                 handler.arg0);
-
-    if (handler.arg1)
-        snprintf(arg1, sizeof arg1, ",arg1='%s'",
-                 handler.arg1);
-
-    if (handler.arg2)
-        snprintf(arg2, sizeof arg2, ",arg2='%s'",
-                 handler.arg2);
-
-    snprintf(buff, size, "type=signal%s%s%s%s%s%s",
-             interface, object, member,
-             arg0, arg1, arg2);
-
+    if (signalMessageHandler.m_interfaceName)
+        snprintf(interfaceName, sizeof interfaceName, ",interface='%s'", signalMessageHandler.m_interfaceName);
+    if (signalMessageHandler.m_objectPath)
+        snprintf(objectPath, sizeof objectPath, ",path='%s'", signalMessageHandler.m_objectPath);
+    if (signalMessageHandler.m_signalName)
+        snprintf(memberName, sizeof memberName, ",member='%s'", signalMessageHandler.m_signalName);
+    if (signalMessageHandler.m_argument0)
+        snprintf(argument0, sizeof argument0, ",arg0='%s'", signalMessageHandler.m_argument0);
+    if (signalMessageHandler.m_argument1)
+        snprintf(argument1, sizeof argument1, ",arg1='%s'", signalMessageHandler.m_argument1);
+    if (signalMessageHandler.m_argument2)
+        snprintf(argument2, sizeof argument2, ",arg2='%s'", signalMessageHandler.m_argument2);
+    snprintf(matchBuffer, matchBufferSize, "type=signal%s%s%s%s%s%s", interfaceName, objectPath, memberName, argument0, argument1, argument2);
     return true;
 }
 
-void
-Compositor::addSystemBusMatches()
+void Compositor::addSystemBusMatches()
 {
-    for (size_t i = 0; s_systemBusHandlers[i].callback; ++i) {
-        char match[256];
-        if (generateMatch(s_systemBusHandlers[i], match, sizeof match)) {
-            log_debug("add match: " << match);
-            dbus_bus_add_match(m_systemBus, match, 0);
+    for (size_t i = 0; s_systemBusSignalHandlers[i].m_signalMessageHanderFunction; ++i) {
+        char signalMatch[256];
+        if (generateMatchForSignalMessageHandler(s_systemBusSignalHandlers[i], signalMatch, sizeof signalMatch)) {
+            log_debug("add match: " << signalMatch);
+            dbus_bus_add_match(m_systemBusConnection, signalMatch, 0);
         }
     }
 }
 
-void
-Compositor::removeSystemBusMatches()
+void Compositor::removeSystemBusMatches()
 {
-    for (size_t i = 0; s_systemBusHandlers[i].callback; ++i) {
-        char match[256];
-        if (generateMatch(s_systemBusHandlers[i], match, sizeof match)) {
-            log_debug("remove match: " << match);
-            dbus_bus_remove_match(m_systemBus, match, 0);
+    for (size_t i = 0; s_systemBusSignalHandlers[i].m_signalMessageHanderFunction; ++i) {
+        char signalMatch[256];
+        if (generateMatchForSignalMessageHandler(s_systemBusSignalHandlers[i], signalMatch, sizeof signalMatch)) {
+            log_debug("remove match: " << signalMatch);
+            dbus_bus_remove_match(m_systemBusConnection, signalMatch, 0);
         }
     }
 }
 
-void
-Compositor::subscribeSystemdNotifications() const
+bool Compositor::connectToSystemBus()
 {
-    log_debug("subscribe: call");
-    dbushelper_send(m_systemBus,
-                    SYSTEMD_SERVICE,
-                    SYSTEMD_MANAGER_PATH,
-                    SYSTEMD_MANAGER_INTERFACE,
-                    SYSTEMD_MANAGER_METHOD_SUBSCRIBE,
-                    [](DBusPendingCall *pc, void *aptr) {
-                        (void)aptr;
-                        DBusMessage *rsp = 0;
-                        if ((rsp = dbushelper_steal_reply(pc))) {
-                            log_debug("subscribe: reply");
-                            dbus_message_unref(rsp);
-                        }
-                    },
-                    0, 0, 0,
-                    DBUS_TYPE_INVALID);
-}
-
-bool
-Compositor::evaluateNameReplacement(void)
-{
-    if (!m_replacementAllowed && compositorOwned() && targetUnitActive()) {
-        DBusError err = DBUS_ERROR_INIT;
-        unsigned flags = (DBUS_NAME_FLAG_DO_NOT_QUEUE |
-                          DBUS_NAME_FLAG_ALLOW_REPLACEMENT);
-        int rc = dbus_bus_request_name(m_systemBus,
-                                       COMPOSITOR_SERVICE,
-                                       flags, &err);
-        if (dbus_error_is_set(&err)) {
-            log_err("failed to adjust dbus name:"
-                    << err.name << ": " <<  err.message);
-        } else if (rc != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER &&
-                   rc != DBUS_REQUEST_NAME_REPLY_ALREADY_OWNER) {
-            log_err("failed to adjust dbus name: rc=" << rc);
-        } else {
-            log_debug("compositor handoff allowed");
-            m_replacementAllowed = true;
-        }
-        dbus_error_free(&err);
-    }
-
-    if (targetUnitActive() && !m_replacementAllowed) {
-        log_err("compositor handoff not possible; exit immediately");
-        m_eventLoop->exit();
-    }
-
-    return m_replacementAllowed;
-}
-
-bool
-Compositor::acquireName()
-{
-    DBusError err = DBUS_ERROR_INIT;
-    unsigned flags = (DBUS_NAME_FLAG_DO_NOT_QUEUE |
-                      DBUS_NAME_FLAG_REPLACE_EXISTING);
-    int rc = dbus_bus_request_name(m_systemBus,
-                                   COMPOSITOR_SERVICE,
-                                   flags, &err);
-    if (dbus_error_is_set(&err)) {
-        log_err("failed to obtain dbus name:"
-                << err.name << ": " <<  err.message);
-    } else if (rc != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
-        log_err("failed to obtain dbus name");
-    } else {
-        updateCompositorOwned(true);
-        addSystemBusMatches();
-        subscribeSystemdNotifications();
-        mceNameOwnerQuery();
-        targetUnitPropsQuery();
-    }
-    dbus_error_free(&err);
-
-    return compositorOwned();
-}
-
-bool
-Compositor::connectToSystemBus()
-{
-    if (!m_systemBus) {
+    if (!m_systemBusConnection) {
         log_debug("dbus connect");
-        DBusError err = DBUS_ERROR_INIT;
-        if (!(m_systemBus = dbus_bus_get(DBUS_BUS_SYSTEM, &err))) {
+        DBusError dbusError = DBUS_ERROR_INIT;
+        if (!(m_systemBusConnection = dbus_bus_get(DBUS_BUS_SYSTEM, &dbusError))) {
             log_err("system bus connect failed: "
-                    << err.name << ": " <<  err.message);
+                    << dbusError.name << ": " <<  dbusError.message);
         } else {
-            dbus_connection_add_filter(m_systemBus, systemBusFilter,
-                                       static_cast<void*>(this), 0);
+            dbus_connection_add_filter(m_systemBusConnection, systemBusMessageFilter, static_cast<void*>(this), 0);
         }
-        dbus_error_free(&err);
+        dbus_error_free(&dbusError);
     }
-
-    return m_systemBus != 0;
+    return m_systemBusConnection != 0;
 }
 
-void
-Compositor::disconnectFromSystemBus()
+void Compositor::disconnectFromSystemBus()
 {
-    if (m_systemBus) {
+    if (m_systemBusConnection) {
         log_debug("dbus disconnect");
-
-        dbus_connection_remove_filter(m_systemBus, systemBusFilter,
-                                      static_cast<void*>(this));
-
-        if (dbus_connection_get_is_connected(m_systemBus)) {
+        dbus_connection_remove_filter(m_systemBusConnection, systemBusMessageFilter, static_cast<void*>(this));
+        if (dbus_connection_get_is_connected(m_systemBusConnection)) {
             removeSystemBusMatches();
-
             /* Note: Name is left to be released implicitly
              *       when we get disconnected at exit, or
              *       we are exiting because it was already
              *       taken from us via ownership replacement.
              */
         }
-
-        dbus_connection_unref(m_systemBus),
-            m_systemBus = nullptr;
+        dbus_connection_unref(m_systemBusConnection);
+        m_systemBusConnection = nullptr;
     }
 }
 };
