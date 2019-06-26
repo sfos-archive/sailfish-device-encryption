@@ -19,6 +19,7 @@ BuildRequires: sailfish-minui-devel >= 0.0.19
 BuildRequires: sailfish-minui-dbus-devel
 BuildRequires: sailfish-minui-label-tool
 BuildRequires: pkgconfig(glib-2.0)
+BuildRequires: pkgconfig(libcryptsetup)
 BuildRequires: pkgconfig(libdbusaccess)
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(udisks2)
@@ -50,6 +51,12 @@ Requires: oneshot
 %description service
 Encrypts home partition on request.
 
+%package devel
+Summary:  Development files for Sailfish Device Encryption
+
+%description devel
+%{summary}.
+
 %prep
 %setup -q
 
@@ -60,6 +67,11 @@ make %{?_smp_mflags}
 popd
 
 pushd encryption-service
+make %{?_smp_mflags}
+popd
+
+pushd libsailfishdeviceencryption
+%qmake5 "VERSION=%{version}"
 make %{?_smp_mflags}
 popd
 
@@ -80,6 +92,10 @@ ln -s ../home-encryption-preparation.service \
 mkdir -p %{buildroot}/%{_sysconfdir}
 touch %{buildroot}/%{_sysconfdir}/crypttab
 chmod 600 %{buildroot}/%{_sysconfdir}/crypttab
+popd
+
+pushd libsailfishdeviceencryption
+%qmake5_install
 popd
 
 mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
@@ -117,6 +133,12 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %ghost %dir %{unit_conf_dir}/systemd-user-sessions.service.d
 %ghost %config(noreplace) %{unit_conf_dir}/home-mount-settle.service.d/50-sailfish-home.conf
 %ghost %config(noreplace) %{unit_conf_dir}/actdead.target.wants/jolla-actdead-charging.service
+
+%files devel
+%defattr(-,root,root,-)
+%{_libdir}/libsailfishdeviceencryption.a
+%{_libdir}/pkgconfig/sailfishdeviceencryption.pc
+%{_includedir}/libsailfishdeviceencryption
 
 %package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI
