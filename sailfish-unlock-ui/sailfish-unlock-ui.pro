@@ -36,14 +36,21 @@ OTHER_FILES += \
     rpm/sailfish-unlock-ui.spec
 
 labels.ids = \
-    sailfish-device-encryption-unlock-ui-la-enter_security_code
+    sailfish-device-encryption-unlock-ui-la-enter_security_code \
+    sailfish-device-encryption-unlock-ui-la-emergency_call \
+    sailfish-device-encryption-unlock-ui-bt-start_call \
+    sailfish-device-encryption-unlock-ui-bt-end_call
 labels.heading = true
 labels.size = ExtraLarge
 labels.alignment = Center
 
 warningLabels.ids = \
     sailfish-device-encryption-unlock-ui-la-incorrect_security_code \
-    sailfish-device-encryption-unlock-ui-la-last_chance
+    sailfish-device-encryption-unlock-ui-la-last_chance \
+    sailfish-device-encryption-unlock-ui-la-invalid_emergency_number \
+    sailfish-device-encryption-unlock-ui-la-calling_emergency_number \
+    sailfish-device-encryption-unlock-ui-la-emergency_call_failed \
+    sailfish-device-encryption-unlock-ui-la-emergency_call_ended
 warningLabels.size = Small
 warningLabels.alignment = Center
 
