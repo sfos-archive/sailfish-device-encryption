@@ -29,7 +29,7 @@ Call::Call(MinUi::DBus::EventLoop *eventLoop)
     , m_systemBus(nullptr)
     , m_phoneNumber("")
     , m_statusCallback(nullptr)
-    , m_callObjectPath(nullptr)
+    , m_callObjectPath("")
     , m_speakerEnabled(false)
     , m_ofono_status(OfonoIdle)
     , m_resource_status(ResourcesIdle)
@@ -42,8 +42,6 @@ Call::Call(MinUi::DBus::EventLoop *eventLoop)
 Call::~Call()
 {
     endCall();
-    free(m_callObjectPath);
-    m_callObjectPath = nullptr;
     disconnectResources();
     if (m_voiceCallManager) {
         delete m_voiceCallManager;
@@ -189,11 +187,10 @@ void Call::handleModemPath(DBusPendingCall *call)
 
             m_voiceCallManager->connect<MinDBus::ObjectPath>("CallRemoved",
                 [this](MinDBus::ObjectPath call) {
-                    if (calling() && strcmp(m_callObjectPath, call) == 0) {
+                    if (calling() && m_callObjectPath.compare(call) == 0) {
                         log_warning("The other end ended the call or there was an error");
                         releaseResources();
-                        free(m_callObjectPath);
-                        m_callObjectPath = nullptr;
+                        m_callObjectPath.assign("");
                         disableEmergencyCallMode();
                         m_ofono_status = OfonoIdle;
                         m_statusCallback(Ended);
@@ -367,7 +364,7 @@ void Call::dial()
                 m_phoneNumber.empty() ? DEFAULT_EMERGENCY_NUMBER : m_phoneNumber.c_str(), HIDE_CALLERID_DEFAULT);
         call->onFinished([this](MinDBus::ObjectPath call) {
             log_debug("Dialing " << m_phoneNumber << ", call " << call);
-            m_callObjectPath = strdup(call);
+            m_callObjectPath.assign(call);
             m_ofono_status = OfonoCalling;
             m_statusCallback(Calling);
         });
@@ -396,15 +393,13 @@ void Call::hangUp()
     auto call = m_voiceCallManager->call("HangupAll");
     call->onFinished([this] {
         log_debug("Ofono ended call");
-        free(m_callObjectPath);
-        m_callObjectPath = nullptr;
+        m_callObjectPath.assign("");
         m_ofono_status = OfonoIdle;
         m_statusCallback(Ended);
     });
     call->onError([this](const char *name, const char *message) {
         log_err("While ending call: " << name << ": " << message);
-        free(m_callObjectPath);
-        m_callObjectPath = nullptr;
+        m_callObjectPath.assign("");
         m_ofono_status = OfonoError;
         m_statusCallback(Error);
     });

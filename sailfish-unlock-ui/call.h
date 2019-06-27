@@ -82,7 +82,7 @@ private:
     DBusConnection *m_systemBus;
     std::string m_phoneNumber;
     Callback m_statusCallback;
-    char *m_callObjectPath;
+    std::string m_callObjectPath;
     bool m_speakerEnabled;
 
     enum OfonoStatus {
