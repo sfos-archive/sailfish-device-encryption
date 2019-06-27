@@ -22,8 +22,10 @@ BuildRequires: pkgconfig(glib-2.0)
 BuildRequires: pkgconfig(libcryptsetup)
 BuildRequires: pkgconfig(libdbusaccess)
 BuildRequires: pkgconfig(libsystemd-daemon)
-BuildRequires: pkgconfig(udisks2)
+BuildRequires: pkgconfig(libresource)
 BuildRequires: pkgconfig(mce)
+BuildRequires: pkgconfig(ohm-ext-route)
+BuildRequires: pkgconfig(udisks2)
 Requires:      %{name}-unlock-ui
 Requires:      %{name}-service
 

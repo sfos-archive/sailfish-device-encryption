@@ -14,15 +14,19 @@ CONFIG += sailfish-minui-resources
 PKGCONFIG += \
     sailfish-minui \
     sailfish-minui-dbus \
-    glib-2.0
+    glib-2.0 \
+    libresource \
+    ohm-ext-route
 
 HEADERS += \
+    call.h \
     compositor.h \
     devicelocksettings.h \
     pin.h
 
 SOURCES += \
     main.cpp \
+    call.cpp \
     compositor.cpp \
     devicelocksettings.cpp \
     touchinput.c \

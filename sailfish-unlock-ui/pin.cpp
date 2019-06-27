@@ -3,6 +3,7 @@
  */
 
 #include "pin.h"
+#include "call.h"
 #include "logging.h"
 #include "devicelocksettings.h"
 #include <sailfish-minui-dbus/eventloop.h>
@@ -56,7 +57,7 @@ PinUi::~PinUi()
     m_busyIndicator = nullptr;
 }
 
-PinUi::PinUi(MinUi::EventLoop *eventLoop)
+PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
     : MinUi::Window(eventLoop)
     , Compositor(eventLoop)
     , m_password(nullptr)
@@ -72,6 +73,7 @@ PinUi::PinUi(MinUi::EventLoop *eventLoop)
     , m_dbus(nullptr)
     , m_socket(nullptr)
     , m_watcher(false)
+    , m_call(Call(eventLoop))
 {
 }
 

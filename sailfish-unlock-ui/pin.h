@@ -8,6 +8,7 @@
 #include <sailfish-minui/eventloop.h>
 #include <sailfish-mindbus/object.h>
 
+#include "call.h"
 #include "compositor.h"
 
 namespace Sailfish {
@@ -38,7 +39,7 @@ public:
     void showError();
 
 private:
-    PinUi(MinUi::EventLoop *eventLoop);
+    PinUi(MinUi::DBus::EventLoop *eventLoop);
     virtual ~PinUi();
     MinUi::Label *createLabel(const char *name, int y);
 
@@ -94,6 +95,7 @@ private:
     MinDBus::Object *m_dbus;
     const char *m_socket;
     bool m_watcher;
+    Call m_call;
 };
 }
 #endif /* UNLOCK_AGENT_PIN_H_ */
