@@ -92,11 +92,11 @@ PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
     , m_socket(nullptr)
     , m_watcher(false)
     , m_emergencyButton(nullptr)
+    , m_emergencyMode(false)
     , m_emergencyBackground(nullptr)
     , m_emergencyLabel(nullptr)
     , m_call(Call(eventLoop))
     , m_speakerButton(nullptr)
-    , m_emergencyMode(false)
 {
 }
 
