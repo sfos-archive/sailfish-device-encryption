@@ -77,8 +77,20 @@ void Call::makeCall(std::string &phoneNumber, Callback callback)
         return;
     }
     startAcquiringResources();
-    if (!m_routeManager)
+    if (!m_routeManager) {
         m_routeManager = new MinDBus::Object(m_systemBus, OHM_EXT_ROUTE_MANAGER_INTERFACE, OHM_EXT_ROUTE_MANAGER_PATH, OHM_EXT_ROUTE_MANAGER_INTERFACE);
+        m_routeManager->connect<const char *, uint32_t>("AudioRouteChanged", [this](const char *route, uint32_t) {
+            if (strcmp(route, "earpiece") == 0) {
+                m_speakerEnabled = false;
+                m_statusCallback(EarpieceOn);
+                log_debug("Audio routed to earpiece");
+            } else if (strcmp(route, "speaker") == 0) {
+                m_speakerEnabled = true;
+                m_statusCallback(SpeakerOn);
+                log_debug("Audio routed to speaker");
+            }
+        });
+    }
     placeCall();
 }
 
@@ -99,28 +111,20 @@ bool Call::calling()
 void Call::enableSpeaker()
 {
     if (m_routeManager) {
-        auto call = m_routeManager->call(OHM_EXT_ROUTE_ENABLE_METHOD, "speaker");
-        call->onFinished([this] {
-            m_speakerEnabled = true;
-            log_debug("Enabled speaker");
-        });
-        call->onError([this](const char *name, const char *message) {
-            log_err("Error while enabling speaker: " << name << ": " << message);
-        });
+        m_routeManager->call(OHM_EXT_ROUTE_ENABLE_METHOD, "speaker")->onError(
+            [this](const char *name, const char *message) {
+                log_err("Error while enabling speaker: " << name << ": " << message);
+            });
     }
 }
 
 void Call::disableSpeaker()
 {
     if (m_routeManager) {
-        auto call = m_routeManager->call(OHM_EXT_ROUTE_DISABLE_METHOD, "speaker");
-        call->onFinished([this] {
-            m_speakerEnabled = false;
-            log_debug("Disabled speaker");
-        });
-        call->onError([this](const char *name, const char *message) {
-            log_err("Error while enabling speaker: " << name << ": " << message);
-        });
+        m_routeManager->call(OHM_EXT_ROUTE_DISABLE_METHOD, "speaker")->onError(
+            [this](const char *name, const char *message) {
+                log_err("Error while disabling speaker: " << name << ": " << message);
+            });
     }
 }
 

@@ -262,17 +262,6 @@ void PinUi::setEmergencyMode(bool emergency)
 
             m_speakerButton->onActivated([this]() {
                 m_call.toggleSpeaker();
-                MinUi::Palette palette = m_speakerButton->palette();
-                if (m_call.speakerEnabled()) {
-                    palette.normal = color_white;
-                    palette.selected = color_white;
-                    palette.pressed = color_red;
-                } else {
-                    palette.normal = color_red;
-                    palette.selected = color_red;
-                    palette.pressed = color_white;
-                }
-                m_speakerButton->setPalette(palette);
             });
         } else {
             m_speakerButton->setVisible(true);
@@ -536,7 +525,25 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
         case Call::Status::Ended:
             m_warningLabel = createLabel(m_emergency_call_ended, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
             m_key->setAcceptText(m_start_call);
+            // Fall through to reset speaker status
+        case Call::Status::EarpieceOn: {
+            // Speaker disabled
+            MinUi::Palette palette = m_speakerButton->palette();
+            palette.normal = color_red;
+            palette.selected = color_red;
+            palette.pressed = color_white;
+            m_speakerButton->setPalette(palette);
             break;
+        }
+        case Call::Status::SpeakerOn: {
+           // Speaker enabled
+            MinUi::Palette palette = m_speakerButton->palette();
+            palette.normal = color_white;
+            palette.selected = color_white;
+            palette.pressed = color_red;
+            m_speakerButton->setPalette(palette);
+            break;
+        }
         default:
             break;
     }
