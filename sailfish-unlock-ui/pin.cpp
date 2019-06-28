@@ -96,6 +96,7 @@ PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
     , m_emergencyLabel(nullptr)
     , m_call(Call(eventLoop))
     , m_speakerButton(nullptr)
+    , m_emergencyMode(false)
 {
 }
 
