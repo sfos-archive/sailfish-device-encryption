@@ -167,11 +167,13 @@ void PinUi::createUI()
     m_busyIndicator = new MinUi::BusyIndicator(this);
     m_busyIndicator->setColor(m_palette.pressed);
     m_busyIndicator->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_busyIndicator->setY(m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
+    // Should be below the warning text that is created during when error occurs. Height of the warning label is
+    // in reality fontSizeSmall but that's currently not exposed from the theme. Hence, iconSizeSmall.
+    m_busyIndicator->setY(m_label->y() + m_label->height() + MinUi::theme.iconSizeSmall + 2 * MinUi::theme.paddingLarge);
 
     m_emergencyButton = new MinUi::IconButton("icon-lockscreen-emergency-call", this);
     m_emergencyButton->setX(m_label->x());
-    m_emergencyButton->setY(m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
+    m_emergencyButton->setY(m_busyIndicator->y());
     MinUi::Palette palette;
     palette.normal = color_lightred;
     palette.selected = color_lightred;
