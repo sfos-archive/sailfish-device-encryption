@@ -21,6 +21,7 @@
 #define TEMPORARY_KEY_FILE \
     "/var/lib/sailfish-device-encryption/temporary-encryption-key"
 #define TEMPORARY_KEY "00000"
+#define EMERGENCY_MODE_TIMEOUT 5000
 
 static inline bool temporary_key_is_set();
 
@@ -212,9 +213,17 @@ void PinUi::createUI()
                 m_call.endCall();
             } else {
                 // Cancel pressed, get out of the emergency call mode
+                if (m_timer) {
+                    eventLoop()->cancelTimer(m_timer);
+                    m_timer = 0;
+                }
                 setEmergencyMode(false);
             }
-        } else if (character && m_timer == 0) {
+        } else if (character) {
+            if (m_timer) {
+                eventLoop()->cancelTimer(m_timer);
+                m_timer = 0;
+            }
             if (m_warningLabel) {
                 reset();
             }
@@ -527,6 +536,11 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
         case Call::Status::Ended:
             m_warningLabel = createLabel(m_emergency_call_ended, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
             m_key->setAcceptText(m_start_call);
+            m_timer = eventLoop()->createTimer(EMERGENCY_MODE_TIMEOUT, [this]() {
+                eventLoop()->cancelTimer(m_timer);
+                m_timer = 0;
+                setEmergencyMode(false);
+            });
             // Fall through to reset speaker status
         case Call::Status::EarpieceOn: {
             // Speaker disabled
