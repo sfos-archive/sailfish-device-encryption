@@ -17,10 +17,12 @@ public:
     ~Call();
 
     enum Status {
-        Calling,
-        Error,
-        InvalidNumber,
-        Ended,
+        Calling,        // Call ongoing, may or may not be active
+        Error,          // Some error happened, not calling
+        InvalidNumber,  // Invalid number, call was not started
+        Ended,          // Call was ended
+        EarpieceOn,     // Sound routed to earpiece, speaker off
+        SpeakerOn,      // Sound routed to speaker, earpiece off
     };
 
     typedef std::function<void(Status status)> Callback;
@@ -82,7 +84,7 @@ private:
     DBusConnection *m_systemBus;
     std::string m_phoneNumber;
     Callback m_statusCallback;
-    char *m_callObjectPath;
+    std::string m_callObjectPath;
     bool m_speakerEnabled;
 
     enum OfonoStatus {
