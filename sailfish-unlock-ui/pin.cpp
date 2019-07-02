@@ -48,6 +48,9 @@ PinUi::~PinUi()
     window()->eventLoop()->cancelTimer(m_timer);
     m_timer = 0;
 
+    stopInactivityShutdownTimer();
+    cancelBatteryEmptyShutdown();
+
     delete m_warningLabel;
     m_warningLabel = nullptr;
 
@@ -98,6 +101,10 @@ PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
     , m_emergencyLabel(nullptr)
     , m_call(Call(eventLoop))
     , m_speakerButton(nullptr)
+    , m_inactivityShutdownEnabled(false)
+    , m_inactivityShutdownTimer(0)
+    , m_batteryEmptyShutdownRequested(false)
+    , m_batteryEmptyShutdownTimer(0)
 {
 }
 
@@ -183,6 +190,9 @@ void PinUi::createUI()
         setEmergencyMode(!m_emergencyMode);
     });
 
+    // We have UI -> Enable shutdown on inactivity
+    setInactivityShutdownEnabled(true);
+
     m_key->onKeyPress([this](int code, char character) {
         if (code == ACCEPT_CODE) {
             if (m_emergencyMode) {
@@ -229,6 +239,9 @@ void PinUi::createUI()
             }
             m_password->setText(m_password->text() + character);
         }
+
+        // Postpone inactivity shutdown
+        restartInactivityShutdownTimer();
     });
 }
 
@@ -302,6 +315,141 @@ void PinUi::setEmergencyMode(bool emergency)
     }
 }
 
+bool PinUi::inactivityShutdownEnabled(void) const
+{
+    return m_inactivityShutdownEnabled;
+}
+
+void PinUi::setInactivityShutdownEnabled(bool enabled)
+{
+    if (m_inactivityShutdownEnabled != enabled) {
+        m_inactivityShutdownEnabled = enabled;
+        log_debug("m_inactivityShutdownEnabled: " << m_inactivityShutdownEnabled);
+
+        if (inactivityShutdownEnabled())
+            startInactivityShutdownTimer();
+        else
+            stopInactivityShutdownTimer();
+    }
+}
+void PinUi::stopInactivityShutdownTimer()
+{
+    if (m_inactivityShutdownTimer) {
+        log_debug("inactivity shutdown timer: stopped");
+        window()->eventLoop()->cancelTimer(m_inactivityShutdownTimer);
+        m_inactivityShutdownTimer = 0;
+    }
+}
+
+void PinUi::startInactivityShutdownTimer()
+{
+    if (m_inactivityShutdownTimer) {
+        /* Already running */
+    } else if (!inactivityShutdownEnabled()) {
+        /* Disabled by UI logic */
+    } else if (chargerState() == ChargerState::ChargerOn) {
+        /* Does not make sense when charger is connected */
+    } else if (dsmeState() != DSME_STATE_USER) {
+        /* Already rebooting / shutting down / something */
+    } else {
+        log_debug("inactivity shutdown timer: started");
+        m_inactivityShutdownTimer =
+            window()->eventLoop()->createTimer(inactivityShutdownDelay, [this]() {
+                stopInactivityShutdownTimer();
+                onInactivityShutdownTimer();
+            });
+    }
+}
+
+void PinUi::restartInactivityShutdownTimer()
+{
+    // Always stop currently scheduled timeout
+    stopInactivityShutdownTimer();
+    // When allowed, start new timeout
+    startInactivityShutdownTimer();
+}
+
+void PinUi::onInactivityShutdownTimer()
+{
+    log_debug("inactivity shutdown timer: triggered");
+    setInactivityShutdownEnabled(false);
+    sendShutdownRequestToDsme();
+}
+
+void PinUi::considerBatteryEmptyShutdown()
+{
+    /* Normally DSME takes care of battery empty shutdown,
+     *
+     * However, the dsme side policy is disable during
+     * device bootup, and we are effectively pausing the
+     * startup sequence for unknown length of time to wait
+     * for user input.
+     *
+     * This basically means that we need to implement
+     * custom battery empty policy within unlock-ui and
+     * shutdown when battery is too low to successfully
+     * finish booting up.
+     */
+
+    bool wantTimer = false;
+
+    if (m_batteryEmptyShutdownRequested) {
+        /* Already requested */
+    } else if (batteryStatus() != BatteryEmpty) {
+        /* Battery is not empty */
+    } else if (chargerState() != ChargerState::ChargerOff) {
+        /* Charger state is not known to be offline
+         *
+         * Note that we must not shutdown while charger
+         * state is unknown.
+         *
+         * Additionally a bit of hysteresis is needed for
+         * offline case too to allow charger detection some
+         * time to settle down to stable state in the early
+         * bootup - handled via 10 second timer delay below.
+         */
+    } else if (dsmeState() != DSME_STATE_USER) {
+        /* Already rebooting / shutting down / something */
+    } else {
+        wantTimer = true;
+    }
+
+    bool haveTimer = (m_batteryEmptyShutdownTimer != 0);
+
+    if (haveTimer != wantTimer) {
+        if (wantTimer) {
+            log_debug("battery empty shutdown timer: started");
+            m_batteryEmptyShutdownTimer =
+                window()->eventLoop()->createTimer(batteryEmptyShutdownDelay, [this]() {
+                    cancelBatteryEmptyShutdown();
+                    onBatteryEmptyShutdown();
+                });
+        } else {
+            cancelBatteryEmptyShutdown();
+        }
+    }
+}
+
+void PinUi::cancelBatteryEmptyShutdown()
+{
+    if (m_batteryEmptyShutdownTimer) {
+        log_debug("battery empty shutdown timer: stopped");
+        window()->eventLoop()->cancelTimer(m_batteryEmptyShutdownTimer);
+        m_batteryEmptyShutdownTimer = 0;
+    }
+}
+
+void PinUi::onBatteryEmptyShutdown()
+{
+    log_warning("battery empty shutdown timer: triggered");
+
+    /* We want to do this only once */
+    m_batteryEmptyShutdownRequested = true;
+
+    /* Send shutdown request */
+    sendShutdownRequestToDsme();
+}
+
 MinUi::Label *PinUi::createLabel(const char *name, int y)
 {
     MinUi::Label *label = new MinUi::Label(name, this);
@@ -324,6 +472,7 @@ void PinUi::reset()
 
 void PinUi::disableAll()
 {
+    setInactivityShutdownEnabled(false);
     setEnabled(false);
     if (m_busyIndicator) {
         m_busyIndicator->setRunning(true);
@@ -336,6 +485,7 @@ void PinUi::enabledAll()
     if (m_busyIndicator) {
         m_busyIndicator->setRunning(false);
     }
+    setInactivityShutdownEnabled(true);
 }
 
 void PinUi::updateAcceptVisibility()
@@ -398,6 +548,65 @@ void PinUi::displayStateChanged()
      * need to care about display state.
      */
 }
+
+void PinUi::chargerStateChanged()
+{
+    if (chargerState() == ChargerState::ChargerOn)
+        stopInactivityShutdownTimer();
+    else
+        startInactivityShutdownTimer();
+
+    considerBatteryEmptyShutdown();
+}
+
+void PinUi::batteryStatusChanged()
+{
+    considerBatteryEmptyShutdown();
+}
+
+void PinUi::batteryLevelChanged()
+{
+    /* TODO: act-dead charging UI does not allow
+     *       attempts to boot up to USER state
+     *       unles battery level >= 3% - should
+     *       we implement something similar here?
+     */
+}
+
+void PinUi::dsmeStateChanged()
+{
+    /* Re-evaluate shutdown conditions */
+    switch (dsmeState())
+    {
+    case DSME_STATE_USER:
+        startInactivityShutdownTimer();
+        considerBatteryEmptyShutdown();
+        break;
+    default:
+        stopInactivityShutdownTimer();
+        cancelBatteryEmptyShutdown();
+        m_batteryEmptyShutdownRequested = false;
+        break;
+    }
+
+    /* Re-evaluate UI state */
+    if (shuttingDown()) {
+        /* TODO:
+         * - disable lock code query
+         */
+        if (shuttingDownToReboot()) {
+            /* TODO: indicate reboot */
+        } else {
+            /* TODO: indicate shutdown */
+        }
+    } else {
+        /* TODO: if applicable
+         * - remove shutdown/reboot indication
+         * - enable lock code query
+         */
+    }
+}
+
 void PinUi::updatesEnabledChanged()
 {
     bool prev = m_displayOn;

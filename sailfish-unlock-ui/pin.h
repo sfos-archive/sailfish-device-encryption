@@ -38,6 +38,25 @@ public:
 
     void showError();
 
+    enum {
+#if 1
+        /* How long to wait for further button presses before
+         * shutting down instead of waiting for use to complete
+         * the unlock code entry.
+         */
+        inactivityShutdownDelay = 5 * 60 * 1000, // [ms] -> 5 minutes
+
+        /* How long to wait between meeting battery-is-empty condition
+         * and initiating shutdown.
+         */
+        batteryEmptyShutdownDelay =     10 * 1000, // [ms] -> 10 seconds
+#else
+        // Shorter valus for test/debug purposes ...
+        inactivityShutdownDelay = 30 * 1000, // [ms] -> 30 seconds
+        batteryEmptyShutdownDelay =  3 * 1000, // [ms] -> 3 seconds
+#endif
+    };
+
 private:
     PinUi(MinUi::DBus::EventLoop *eventLoop);
     virtual ~PinUi();
@@ -57,11 +76,26 @@ private:
     void updateAcceptVisibility();
     void createUI();
     virtual void displayStateChanged();
+    virtual void chargerStateChanged();
+    virtual void batteryStatusChanged();
+    virtual void batteryLevelChanged();
     virtual void updatesEnabledChanged();
+    virtual void dsmeStateChanged();
     void sendPassword(const std::string& password);
     void startAskWatcher();
     static bool askWatcher(int descriptor, uint32_t events);
     void setEmergencyMode(bool emergency);
+
+    bool inactivityShutdownEnabled(void) const;
+    void setInactivityShutdownEnabled(bool enabled);
+    void stopInactivityShutdownTimer();
+    void startInactivityShutdownTimer();
+    void restartInactivityShutdownTimer();
+    void onInactivityShutdownTimer();
+
+    void considerBatteryEmptyShutdown();
+    void cancelBatteryEmptyShutdown();
+    void onBatteryEmptyShutdown();
 
 private:
     MinUi::PasswordField *m_password;
@@ -119,6 +153,10 @@ private:
     MinUi::Label *m_emergencyLabel;
     Call m_call;
     MinUi::IconButton *m_speakerButton;
+    bool m_inactivityShutdownEnabled;
+    int m_inactivityShutdownTimer;
+    bool m_batteryEmptyShutdownRequested;
+    int m_batteryEmptyShutdownTimer;
 };
 }
 #endif /* UNLOCK_AGENT_PIN_H_ */

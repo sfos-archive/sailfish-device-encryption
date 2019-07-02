@@ -8,118 +8,178 @@
 #include <sailfish-minui/ui.h>
 
 namespace Sailfish {
-
-struct UnitProps;
-
+class TargetUnitProperties;
 class Compositor
 {
 public:
-    enum DisplayState {
-        Unknown = -1,
-        Off,
-        Dim,
-        On,
+    enum DsmeState {
+#define DSME_STATE(STATE, VALUE) DSME_STATE_##STATE = VALUE,
+#include <dsme/state_states.h>
+#undef DSME_STATE
     };
-
-    DisplayState displayState() {
-        return m_displayState;
-    }
-
-    bool updatesEnabled() {
-        return m_updatesEnabled > 0;
-    }
-
+    enum DisplayState {
+        DisplayUnknown = -1,
+        DisplayOff,
+        DisplayDim,
+        DisplayOn
+    };
+    enum ChargerState {
+        ChargerUnknown = -1,
+        ChargerOff,
+        ChargerOn
+    };
+    enum BatteryStatus {
+        BatteryUnknown = -1,
+        BatteryFull,
+        BatteryOk,
+        BatteryLow,
+        BatteryEmpty
+    };
+    enum UpdatesState {
+      UpdatesUnknown = -1,
+      UpdatesDisabled,
+      UpdatesEnabled
+    };
     Compositor(MinUi::EventLoop *eventLoop);
     virtual ~Compositor();
-
-    virtual void displayStateChanged() {
-    }
-
-    virtual void updatesEnabledChanged() {
-    }
-
-    void setBlankPreventWanted(bool wanted);
-
-    bool evaluateNameReplacement();
-    bool compositorOwned() const;
-    bool targetUnitActive() const;
-
+    DisplayState displayState() const;
+    ChargerState chargerState() const;
+    BatteryStatus batteryStatus() const;
+    int batteryLevel() const;
+    bool updatesEnabled() const;
+    bool shuttingDownToPowerOff() const;
+    bool shuttingDownToReboot() const;
+    bool shuttingDown() const;
+    DsmeState dsmeState() const;
+    void setBlankPreventWanted(bool blankPreventWanted);
+    void sendShutdownRequestToDsme() const;
+    void sendRebootRequestToDsme() const;
+    void sendPowerupRequestToDsme() const;
+protected:
+    virtual void onShutdown();
+    virtual void onBatteryEmpty();
+    virtual void onThermalShutdown();
+    virtual void onSaveUnsavedData();
+    virtual void dsmeStateChanged();
+    virtual void displayStateChanged();
+    virtual void chargerStateChanged();
+    virtual void batteryStatusChanged();
+    virtual void batteryLevelChanged();
+    virtual void updatesEnabledChanged();
 private:
-    typedef DBusMessage *(Compositor::*HandlerCallback)(DBusMessage *msg);
-
-    struct Handler
+    typedef DBusMessage *(Compositor::*MethodCallMessageHandlerFunction)(DBusMessage *methodCallMessage);
+    struct MethodCallMessageHandler
     {
-        Compositor::HandlerCallback callback;
-        const char *service;
-        const char *object;
-        const char *interface;
-        const char *member;
-        const char *arg0;
-        const char *arg1;
-        const char *arg2;
-        bool        implicit;
+        Compositor::MethodCallMessageHandlerFunction m_methodCallMessageHanderFunction;
+        const char *m_serviceName;
+        const char *m_objectPath;
+        const char *m_interfaceName;
+        const char *m_methodName;
     };
-
-    void updateMceAvailable(bool available);
-    void updateMceNameOwner(const char *owner);
-    DBusMessage *mceNameOwnerHandler(DBusMessage *msg);
-    static void mceNameOwnerReply(DBusPendingCall *pc, void *aptr);
-    void mceNameOwnerQuery();
-
-    void updateDisplayState(const char *state);
-    DBusMessage *displayStateHandler(DBusMessage *msg);
-    static void displayStateReply(DBusPendingCall *pc, void *aptr);
-    void displayStateQuery();
-
-    void terminateBlankingPause();
-    void requestBlankingPause();
-    void evaluateBlankingPause();
-    void updateBlankPreventAllowed(bool allowed);
-    DBusMessage *blankPreventAllowedHandler(DBusMessage *msg);
-    static void blankPreventAllowedReply(DBusPendingCall *pc, void *aptr);
-    void blankPreventAllowedQuery();
-
-    void updateUpdatesEnabled(bool state);
-    DBusMessage *updatesEnabledHandler(DBusMessage *msg);
-
-    void updateCompositorOwned(bool owned);
-    DBusMessage *nameLostHandler(DBusMessage *msg);
-    DBusMessage *nameAcquiredHandler(DBusMessage *msg);
-
-    static DBusHandlerResult systemBusFilter(DBusConnection *con, DBusMessage *msg, void *aptr);
-    bool generateMatch(Compositor::Handler &handler, char *buff, size_t size);
+    typedef void (Compositor::*SignalMessageHandlerFunction)(DBusMessage *signalMessage);
+    struct SignalMessageHandler
+    {
+        Compositor::SignalMessageHandlerFunction m_signalMessageHanderFunction;
+        const char *m_objectPath;
+        const char *m_interfaceName;
+        const char *m_signalName;
+        const char *m_argument0;
+        const char *m_argument1;
+        const char *m_argument2;
+    };
+    void updateInternallyCachedDisplayState(const char *displayStateName);
+    void handleDisplayStateMessageFromMce(DBusMessage *signalMessage);
+    void handleDisplayStateSignalFromMce(DBusMessage *signalMessage);
+    static void handleDisplayStateReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer);
+    void sendDisplayStateQueryToMce();
+    void updateInternallyCachedChargerState(const char *chargerStateName);
+    void handleChargerStateMessageFromMce(DBusMessage *signalOrReplyMessage);
+    void handleChargerStateSignalFromMce(DBusMessage *signalMessage);
+    static void handleChargerStateReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer);
+    void sendChargerStateQueryToMce();
+    void updateInternallyCachedBatteryStatus(const char *batteryStatusName);
+    void handleBatteryStatusMessageFromMce(DBusMessage *signalOrReplyMessage);
+    void handleBatteryStatusSignalFromMce(DBusMessage *signalMessage);
+    static void handleBatteryStatusReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer);
+    void sendBatteryStatusQueryToMce();
+    void updateInsternallyCacheBatteryLevel(int batteryLevel);
+    void handlebatteryLevelMessageFromMce(DBusMessage *signalOrReplyMessage);
+    void handlebatteryLevelSignalFromMce(DBusMessage *signalMessage);
+    static void handleBatteryLevelReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer);
+    void sendBatteryLevelQueryToMce();
+    void sendBlankingPauseStopRequestToMce();
+    void sendBlankingPauseStartRequestToMce();
+    void evaluateNeedForBlankingPauseTimer();
+    void updateInternallyCachedBlankPreventAllowed(bool blankPreventAllowed);
+    void handleBlankPreventAllowedMessageFromMce(DBusMessage *signalOrReplyMessage);
+    void handleBlankPreventAllowedSignalFromMce(DBusMessage *signalMessage);
+    static void handleBlankPreventAllowedReplyFromMce(DBusPendingCall *pendingCall, void *userDataPointer);
+    void sendBlankPreventAllowedQueryToMce();
+    bool mceIsRunning() const;
+    void updateInternallyCachedMceIsRunning(bool mceIsRunning);
+    void updateInternallyCachedMceNameOwner(const char *mceNameOwner);
+    void handleMceNameOwnerSignalFromDbusDaemon(DBusMessage *signalMessage);
+    static void handleMceNameOwnerReplyFromDbusDaemon(DBusPendingCall *pendingCall, void *userDataPointer);
+    void sendMceNameOwnerQueryToDbusDaemon();
+    void updateInternallyCacheUpdatesEnabled(bool updatesEnabled);
+    DBusMessage *handleUpdatesEnabledMethodCallMessage(DBusMessage *methodCallMessage);
+    DBusMessage *handleTopmostWindowPidHandlerMethodCallMessage(DBusMessage *methodCallMessage);
+    DBusMessage *handleIntrospectMethodCallMessage(DBusMessage *methodCallMessage);
+    bool compositorNameOwned() const;
+    void updateInternallyCachedCompositorOwned(bool compositorNameOwned);
+    void handleCompositorNameLostSignalFromDbusDaemon(DBusMessage *signalMessage);
+    void handleCompositorNameAcquiredSignalFromDbusDaemon(DBusMessage *signalMessage);
+    bool sendCompositorNameOwnershipRequestToDbusDaemon();
+    void evaluateCompositorNameOwnerReplacingAllowed();
+    void handleBatteryEmptySignalFromDsme(DBusMessage *signalMessage);
+    void handleSaveUnsavedDataSignalFromDsme(DBusMessage *signalMessage);
+    void handleShutdownSignalFromDsme(DBusMessage *signalMessage);
+    void handleThermalShutdownSignalFromDsme(DBusMessage *signalMessage);
+    void updateInternallyCacheDsmeState(DsmeState dsmeState);
+    void handleDsmeStateMessageFromDsme(DBusMessage *signalOrReplyMessage);
+    void handleDsmeStateSignalFromDsme(DBusMessage *signalMessage);
+    static void handleDsmeStateReplyFromDsme(DBusPendingCall *pendingCall, void *userDataPointer);
+    void sendDsmeStateQuerytoDsme();
+    bool dsmeIsRunning() const;
+    void updateInternallyCachedDsmeIsRunning(bool dsmeIsRunning);
+    void updateInternallyCachedDsmeNameOwner(const char *dsmeNameOwner);
+    void dsmeNameOwnerHandler(DBusMessage *signalMessage);
+    static void dsmeNameOwnerReply(DBusPendingCall *pendingCall, void *userDataPointer);
+    void dsmeNameOwnerQuery();
+    bool targetUnitActive() const;
+    void updateTargetUnitActive(bool targetUnitActive);
+    void evaluateTargetUnitActive();
+    void targetUnitPropsHandler(DBusMessage *signalOrReplyMessage);
+    static void targetUnitPropsReply(DBusPendingCall *pendingCall, void *userDataPointer);
+    void targetUnitPropsQuery();
+    void subscribeSystemdNotifications() const;
+    static DBusHandlerResult systemBusMessageFilter(DBusConnection *dbusConnection, DBusMessage *dbusMessage, void *userDataPointer);
+    bool generateMatchForSignalMessageHandler(Compositor::SignalMessageHandler &signalMessageHandler, char *matchBuffer, size_t matchBufferSize);
     void addSystemBusMatches();
     void removeSystemBusMatches();
-    void subscribeSystemdNotifications() const;
-    bool acquireName();
     bool connectToSystemBus();
     void disconnectFromSystemBus();
-
-    void updateTargetUnitActive(bool active);
-    void evaluateTargetUnitActive();
-    DBusMessage *targetUnitPropsHandler(DBusMessage *msg);
-    static void targetUnitPropsReply(DBusPendingCall *pc, void *aptr);
-    void targetUnitPropsQuery();
-
-private:
-    DBusConnection *m_systemBus;
-    DisplayState    m_displayState;
-    int             m_updatesEnabled;
-    bool            m_compositorOwned;
-    bool            m_replacementAllowed;
-    bool            m_targetUnitActive;
-    UnitProps      *m_targetUnitProps;
-
-    bool            m_mceAvailable;
-    char           *m_mceNameOwner;
-
-    bool            m_blankPreventWanted;
-    bool            m_blankPreventAllowed;
-    int             m_blankPreventTimer;
     MinUi::EventLoop *m_eventLoop;
-
-    static Handler s_systemBusHandlers[];
-
+    DBusConnection *m_systemBusConnection;
+    bool m_targetUnitActive;
+    TargetUnitProperties *m_targetUnitProperties;
+    char *m_dsmeNameOwner;
+    bool m_dsmeIsRunning;
+    DsmeState m_dsmeState;
+    bool m_compositorNameOwned;
+    bool m_replacingCompositorNameOwnerAllowed;
+    UpdatesState m_updatesState;
+    char *m_mceNameOwner;
+    bool m_mceIsRunning;
+    bool m_blankPreventWanted;
+    bool m_blankPreventAllowed;
+    int m_blankPreventRenewTimer;
+    int m_batteryLevel;
+    BatteryStatus m_batteryStatus;
+    ChargerState m_chargerState;
+    DisplayState m_displayState;
+    static SignalMessageHandler s_systemBusSignalHandlers[];
+    static MethodCallMessageHandler s_systemBusMethodCallHandlers[];
 };
 }
 #endif /* UNLOCK_AGENT_COMPOSITOR_H_ */

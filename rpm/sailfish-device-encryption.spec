@@ -24,6 +24,8 @@ BuildRequires: pkgconfig(libdbusaccess)
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(libresource)
 BuildRequires: pkgconfig(mce)
+BuildRequires: pkgconfig(dsme)
+BuildRequires: pkgconfig(dsme_dbus_if)
 BuildRequires: pkgconfig(ohm-ext-route)
 BuildRequires: pkgconfig(udisks2)
 Requires:      %{name}-unlock-ui
