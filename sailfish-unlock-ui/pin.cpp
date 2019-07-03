@@ -191,7 +191,7 @@ void PinUi::createUI()
     palette.selected = color_lightred;
     m_emergencyButton->setPalette(palette);
     m_emergencyButton->onActivated([this]() {
-        setEmergencyMode(!m_emergencyMode);
+        setEmergencyMode(!emergencyMode());
     });
 
     // We have UI -> Enable shutdown on inactivity
@@ -199,7 +199,7 @@ void PinUi::createUI()
 
     m_key->onKeyPress([this](int code, char character) {
         if (code == ACCEPT_CODE) {
-            if (m_emergencyMode) {
+            if (emergencyMode()) {
                 if (m_call.calling()) {
                         // End the ongoing call
                         m_call.endCall();
@@ -248,10 +248,25 @@ void PinUi::createUI()
     });
 }
 
+bool PinUi::emergencyMode() const
+{
+    return m_emergencyMode;
+}
+
 void PinUi::setEmergencyMode(bool emergency)
 {
+    if (m_emergencyMode != emergency) {
+        m_emergencyMode = emergency;
+        log_debug("m_emergencyMode: " << m_emergencyMode);
+        emergencyModeChanged();
+    }
+}
+
+void PinUi::emergencyModeChanged()
+{
+    /* Handle UI changes */
     m_password->setText("");
-    if (emergency) {
+    if (emergencyMode()) {
         m_emergencyBackground->setVisible(true);
         m_label->setVisible(false);
 
@@ -293,8 +308,6 @@ void PinUi::setEmergencyMode(bool emergency)
         } else {
             m_speakerButton->setVisible(true);
         }
-
-        m_emergencyMode = true;
     } else {
         m_emergencyBackground->setVisible(false);
         m_emergencyLabel->setVisible(false);
@@ -313,8 +326,6 @@ void PinUi::setEmergencyMode(bool emergency)
             delete m_warningLabel;
             m_warningLabel = nullptr;
         }
-
-        m_emergencyMode = false;
     }
 }
 
@@ -493,7 +504,7 @@ void PinUi::enabledAll()
 
 void PinUi::updateAcceptVisibility()
 {
-    if (!m_createdUI || m_emergencyMode)
+    if (!m_createdUI || emergencyMode())
         return;
 
     if (m_password->text().length() < DeviceLockSettings::instance()->minimumCodeLength()) {
@@ -744,7 +755,7 @@ bool PinUi::askWatcher(int descriptor, uint32_t events)
 
 void PinUi::setEmergencyCallStatus(Call::Status status)
 {
-    if (!m_emergencyMode) {
+    if (!emergencyMode()) {
         // Not in emergency mode, do nothing
         return;
     }
