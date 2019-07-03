@@ -42,7 +42,9 @@ labels.ids = \
     sailfish-device-encryption-unlock-ui-la-enter_security_code \
     sailfish-device-encryption-unlock-ui-la-emergency_call \
     sailfish-device-encryption-unlock-ui-bt-start_call \
-    sailfish-device-encryption-unlock-ui-bt-end_call
+    sailfish-device-encryption-unlock-ui-bt-end_call \
+    sailfish-device-encryption-unlock-ui-la-goodbye \
+    sailfish-device-encryption-unlock-ui-la-rebooting
 labels.heading = true
 labels.size = ExtraLarge
 labels.alignment = Center

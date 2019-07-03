@@ -77,6 +77,9 @@ PinUi::~PinUi()
 
     delete m_speakerButton;
     m_speakerButton = nullptr;
+
+    delete m_exitNotification;
+    m_exitNotification = nullptr;
 }
 
 PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
@@ -105,6 +108,7 @@ PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
     , m_inactivityShutdownTimer(0)
     , m_batteryEmptyShutdownRequested(false)
     , m_batteryEmptyShutdownTimer(0)
+    , m_exitNotification(nullptr)
 {
 }
 
@@ -209,9 +213,8 @@ void PinUi::createUI()
             } else {
                 // Send the password
                 m_canShowError = true;
-                m_timer = window()->eventLoop()->createTimer(16, [this]() {
-                    window()->eventLoop()->cancelTimer(m_timer);
-                    m_timer = 0;
+                createTimer(16, [this]() {
+                    cancelTimer();
                     disableAll();
                     startAskWatcher();
                     sendPassword(m_password->text());
@@ -505,9 +508,8 @@ int PinUi::execute(const char *socket)
     m_socket = socket;
     if (m_checkTemporaryKey && temporary_key_is_set()) {
         // Send temporary key
-        m_timer = window()->eventLoop()->createTimer(16, [this]() {
-            window()->eventLoop()->cancelTimer(m_timer);
-            m_timer = 0;
+        createTimer(16, [this]() {
+            cancelTimer();
             disableAll();
             startAskWatcher();
             sendPassword(TEMPORARY_KEY);
@@ -590,20 +592,36 @@ void PinUi::dsmeStateChanged()
     }
 
     /* Re-evaluate UI state */
-    if (shuttingDown()) {
-        /* TODO:
-         * - disable lock code query
-         */
+    if (shuttingDown() && !m_exitNotification) {
+        // Hide everything
+        if (m_password)
+            m_password->setVisible(false);
+        if (m_key)
+            m_key->setVisible(false);
+        if (m_label)
+            m_label->setVisible(false);
+        if (m_warningLabel)
+            m_warningLabel->setVisible(false);
+        if (m_busyIndicator)
+            m_busyIndicator->setVisible(false);
+        if (m_emergencyButton)
+            m_emergencyButton->setVisible(false);
+        if (m_emergencyBackground)
+            m_emergencyBackground->setVisible(false);
+        if (m_emergencyLabel)
+            m_emergencyLabel->setVisible(false);
+        if (m_speakerButton)
+            m_speakerButton->setVisible(false);
+        // Show either reboot or poweroff notification
         if (shuttingDownToReboot()) {
-            /* TODO: indicate reboot */
+            //% "One moment..."
+            m_exitNotification = new MinUi::Label(qtTrId("sailfish-device-encryption-unlock-ui-la-rebooting"), this);
         } else {
-            /* TODO: indicate shutdown */
+            //% "Goodbye!"
+            m_exitNotification = new MinUi::Label(qtTrId("sailfish-device-encryption-unlock-ui-la-goodbye"), this);
         }
-    } else {
-        /* TODO: if applicable
-         * - remove shutdown/reboot indication
-         * - enable lock code query
-         */
+        m_exitNotification->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
+        m_exitNotification->centerBetween(*this, MinUi::Top, *this, MinUi::Bottom);
     }
 }
 
@@ -718,7 +736,7 @@ bool PinUi::askWatcher(int descriptor, uint32_t events)
         instance->showError();
     }
     // Timer to exit the mainloop
-    instance->m_timer = instance->eventLoop()->createTimer(100, []() {
+    instance->createTimer(100, []() {
         PinUi::instance()->exit(0);
     });
     return true;
@@ -726,6 +744,11 @@ bool PinUi::askWatcher(int descriptor, uint32_t events)
 
 void PinUi::setEmergencyCallStatus(Call::Status status)
 {
+    if (!m_emergencyMode) {
+        // Not in emergency mode, do nothing
+        return;
+    }
+
     if (m_warningLabel) {
         delete m_warningLabel;
         m_warningLabel = nullptr;
@@ -745,9 +768,8 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
         case Call::Status::Ended:
             m_warningLabel = createLabel(m_emergency_call_ended, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
             m_key->setAcceptText(m_start_call);
-            m_timer = eventLoop()->createTimer(EMERGENCY_MODE_TIMEOUT, [this]() {
-                eventLoop()->cancelTimer(m_timer);
-                m_timer = 0;
+            createTimer(EMERGENCY_MODE_TIMEOUT, [this]() {
+                cancelTimer();
                 setEmergencyMode(false);
             });
             // Fall through to reset speaker status
@@ -774,6 +796,20 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
     }
     if (m_warningLabel)
         m_warningLabel->setColor(color_white);
+}
+
+void PinUi::createTimer(int interval, const std::function<void()> &callback)
+{
+    cancelTimer();
+    m_timer = eventLoop()->createTimer(interval, callback);
+}
+
+void PinUi::cancelTimer()
+{
+    if (m_timer) {
+        eventLoop()->cancelTimer(m_timer);
+        m_timer = 0;
+    }
 }
 
 static inline bool temporary_key_is_set()

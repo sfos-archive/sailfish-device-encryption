@@ -62,6 +62,8 @@ private:
     virtual ~PinUi();
     MinUi::Label *createLabel(const char *name, int y);
     void setEmergencyCallStatus(Call::Status status);
+    void createTimer(int interval, const std::function<void()> &callback);
+    void cancelTimer();
 
 public:
     /**
@@ -157,6 +159,7 @@ private:
     int m_inactivityShutdownTimer;
     bool m_batteryEmptyShutdownRequested;
     int m_batteryEmptyShutdownTimer;
+    MinUi::Label *m_exitNotification;
 };
 }
 #endif /* UNLOCK_AGENT_PIN_H_ */
