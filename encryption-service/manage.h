@@ -3,6 +3,6 @@
 #ifndef __MANAGE_H
 #define __MANAGE_H
 
-void finalize(GMainLoop *main_loop, gboolean temporary_encryption_key);
+void finalize(GMainLoop *main_loop);
 
 #endif // __MANAGE_H

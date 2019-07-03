@@ -23,9 +23,12 @@ GQuark encryption_error_busy(void)
 
 GMainLoop *main_loop;
 
-static gboolean call_encrypt(gchar *passphrase, GError **error)
+static gboolean call_encrypt(
+        gchar *passphrase,
+        gboolean passphrase_is_temporary,
+        GError **error)
 {
-    if (!start_to_encrypt(passphrase)) {
+    if (!start_to_encrypt(passphrase, passphrase_is_temporary)) {
         g_set_error_literal(
                 error, ENCRYPTION_ERROR_FAILED, 0,
                 "Starting encryption failed");
@@ -35,12 +38,12 @@ static gboolean call_encrypt(gchar *passphrase, GError **error)
     return TRUE;
 }
 
-static gboolean call_finalize(gboolean temporary_encryption_key, GError **error)
+static gboolean call_finalize(GError **error)
 {
     switch (get_encryption_status()) {
         case ENCRYPTION_NOT_STARTED:
         case ENCRYPTION_FINISHED:
-            finalize(main_loop, temporary_encryption_key);
+            finalize(main_loop);
             return TRUE;
         default:
             g_set_error_literal(

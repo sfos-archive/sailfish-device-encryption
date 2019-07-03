@@ -26,9 +26,9 @@ static const gchar introspection_xml[] =
     "<interface name=\"" ENCRYPTION_IFACE "\">"
     "<method name=\"" ENCRYPTION_METHOD "\">"
     "<arg name=\"passphrase\" direction=\"in\" type=\"s\"></arg>"
+    "<arg name=\"temporaryPassphrase\" direction=\"in\" type=\"b\"></arg>"
     "</method>"
     "<method name=\"" FINALIZATION_METHOD "\">"
-    "<arg name=\"temporaryEncryptionKey\" direction=\"in\" type=\"b\"></arg>"
     "</method>"
     "<signal name=\"" ENCRYPTION_FINISHED_SIGNAL "\">"
     "<arg name=\"success\" type=\"b\" />"
@@ -106,7 +106,7 @@ void method_call_handler(
     GError *error = NULL;
     GVariantIter iter;
     gchar *passphrase;
-    gboolean temporary_encryption_key = FALSE;
+    gboolean temporary_passphrase = FALSE;
 
     if (!is_allowed(connection, sender)) {
         g_dbus_method_invocation_return_dbus_error(
@@ -121,8 +121,10 @@ void method_call_handler(
     if (strcmp(method_name, ENCRYPTION_METHOD) == 0) {
         g_variant_iter_init(&iter, parameters);
         g_variant_iter_next(&iter, "s", &passphrase);
+        g_variant_iter_next(&iter, "b", &temporary_passphrase);
 
-        if (data.encrypt_method(passphrase, &error)) {
+        // Encrypt method takes the ownership of passphrase now
+        if (data.encrypt_method(passphrase, temporary_passphrase, &error)) {
             g_dbus_method_invocation_return_value(invocation, NULL);
             data.receiver = g_strdup(sender);
         } else {
@@ -130,10 +132,7 @@ void method_call_handler(
             g_error_free(error);
         }
     } else if (strcmp(method_name, FINALIZATION_METHOD) == 0) {
-        g_variant_iter_init(&iter, parameters);
-        g_variant_iter_next(&iter, "b", &temporary_encryption_key);
-
-        if (data.finalize_method(temporary_encryption_key, &error)) {
+        if (data.finalize_method(&error)) {
             g_dbus_method_invocation_return_value(invocation, NULL);
         } else {
             g_dbus_method_invocation_return_gerror(invocation, error);
