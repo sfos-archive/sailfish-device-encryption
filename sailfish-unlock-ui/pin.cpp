@@ -327,6 +327,13 @@ void PinUi::emergencyModeChanged()
             m_warningLabel = nullptr;
         }
     }
+
+    /* Handle shutdown policy */
+    if (emergencyMode())
+        stopInactivityShutdownTimer();
+    else
+        startInactivityShutdownTimer();
+    considerBatteryEmptyShutdown();
 }
 
 bool PinUi::inactivityShutdownEnabled(void) const
@@ -361,6 +368,8 @@ void PinUi::startInactivityShutdownTimer()
         /* Already running */
     } else if (!inactivityShutdownEnabled()) {
         /* Disabled by UI logic */
+    } else if (emergencyMode()) {
+        /* Disabled by ongoing emergency call */
     } else if (chargerState() == ChargerState::ChargerOn) {
         /* Does not make sense when charger is connected */
     } else if (dsmeState() != DSME_STATE_USER) {
@@ -411,6 +420,8 @@ void PinUi::considerBatteryEmptyShutdown()
         /* Already requested */
     } else if (batteryStatus() != BatteryEmpty) {
         /* Battery is not empty */
+    } else if (emergencyMode()) {
+        /* Disabled by ongoing emergency call */
     } else if (chargerState() != ChargerState::ChargerOff) {
         /* Charger state is not known to be offline
          *
