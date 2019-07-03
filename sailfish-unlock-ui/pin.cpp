@@ -366,6 +366,8 @@ void PinUi::startInactivityShutdownTimer()
 {
     if (m_inactivityShutdownTimer) {
         /* Already running */
+    } else if (targetUnitActive()) {
+        /* Yield to DSME side shutdown policy */
     } else if (!inactivityShutdownEnabled()) {
         /* Disabled by UI logic */
     } else if (emergencyMode()) {
@@ -418,6 +420,8 @@ void PinUi::considerBatteryEmptyShutdown()
 
     if (m_batteryEmptyShutdownRequested) {
         /* Already requested */
+    } else if (targetUnitActive()) {
+        /* Yield to DSME side shutdown policy */
     } else if (batteryStatus() != BatteryEmpty) {
         /* Battery is not empty */
     } else if (emergencyMode()) {
@@ -645,6 +649,15 @@ void PinUi::dsmeStateChanged()
         m_exitNotification->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
         m_exitNotification->centerBetween(*this, MinUi::Top, *this, MinUi::Bottom);
     }
+}
+
+void PinUi::targetUnitActiveChanged()
+{
+    if (targetUnitActive())
+        stopInactivityShutdownTimer();
+    else
+        startInactivityShutdownTimer();
+    considerBatteryEmptyShutdown();
 }
 
 void PinUi::updatesEnabledChanged()

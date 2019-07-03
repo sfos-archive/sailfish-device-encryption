@@ -51,6 +51,7 @@ public:
     bool shuttingDownToReboot() const;
     bool shuttingDown() const;
     DsmeState dsmeState() const;
+    bool targetUnitActive() const;
     void setBlankPreventWanted(bool blankPreventWanted);
     void sendShutdownRequestToDsme() const;
     void sendRebootRequestToDsme() const;
@@ -66,6 +67,7 @@ protected:
     virtual void batteryStatusChanged();
     virtual void batteryLevelChanged();
     virtual void updatesEnabledChanged();
+    virtual void targetUnitActiveChanged();
 private:
     typedef DBusMessage *(Compositor::*MethodCallMessageHandlerFunction)(DBusMessage *methodCallMessage);
     struct MethodCallMessageHandler
@@ -146,7 +148,6 @@ private:
     void dsmeNameOwnerHandler(DBusMessage *signalMessage);
     static void dsmeNameOwnerReply(DBusPendingCall *pendingCall, void *userDataPointer);
     void dsmeNameOwnerQuery();
-    bool targetUnitActive() const;
     void updateTargetUnitActive(bool targetUnitActive);
     void evaluateTargetUnitActive();
     void targetUnitPropsHandler(DBusMessage *signalOrReplyMessage);

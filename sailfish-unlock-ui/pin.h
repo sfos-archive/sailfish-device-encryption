@@ -83,6 +83,7 @@ private:
     virtual void batteryLevelChanged();
     virtual void updatesEnabledChanged();
     virtual void dsmeStateChanged();
+    virtual void targetUnitActiveChanged();
     void sendPassword(const std::string& password);
     void startAskWatcher();
     static bool askWatcher(int descriptor, uint32_t events);
