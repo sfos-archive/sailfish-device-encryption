@@ -191,7 +191,7 @@ void PinUi::createUI()
     palette.selected = color_lightred;
     m_emergencyButton->setPalette(palette);
     m_emergencyButton->onActivated([this]() {
-        setEmergencyMode(!m_emergencyMode);
+        setEmergencyMode(!emergencyMode());
     });
 
     // We have UI -> Enable shutdown on inactivity
@@ -199,7 +199,7 @@ void PinUi::createUI()
 
     m_key->onKeyPress([this](int code, char character) {
         if (code == ACCEPT_CODE) {
-            if (m_emergencyMode) {
+            if (emergencyMode()) {
                 if (m_call.calling()) {
                         // End the ongoing call
                         m_call.endCall();
@@ -248,10 +248,25 @@ void PinUi::createUI()
     });
 }
 
+bool PinUi::emergencyMode() const
+{
+    return m_emergencyMode;
+}
+
 void PinUi::setEmergencyMode(bool emergency)
 {
+    if (m_emergencyMode != emergency) {
+        m_emergencyMode = emergency;
+        log_debug("m_emergencyMode: " << m_emergencyMode);
+        emergencyModeChanged();
+    }
+}
+
+void PinUi::emergencyModeChanged()
+{
+    /* Handle UI changes */
     m_password->setText("");
-    if (emergency) {
+    if (emergencyMode()) {
         m_emergencyBackground->setVisible(true);
         m_label->setVisible(false);
 
@@ -293,8 +308,6 @@ void PinUi::setEmergencyMode(bool emergency)
         } else {
             m_speakerButton->setVisible(true);
         }
-
-        m_emergencyMode = true;
     } else {
         m_emergencyBackground->setVisible(false);
         m_emergencyLabel->setVisible(false);
@@ -313,9 +326,14 @@ void PinUi::setEmergencyMode(bool emergency)
             delete m_warningLabel;
             m_warningLabel = nullptr;
         }
-
-        m_emergencyMode = false;
     }
+
+    /* Handle shutdown policy */
+    if (emergencyMode())
+        stopInactivityShutdownTimer();
+    else
+        startInactivityShutdownTimer();
+    considerBatteryEmptyShutdown();
 }
 
 bool PinUi::inactivityShutdownEnabled(void) const
@@ -348,8 +366,12 @@ void PinUi::startInactivityShutdownTimer()
 {
     if (m_inactivityShutdownTimer) {
         /* Already running */
+    } else if (targetUnitActive()) {
+        /* Yield to DSME side shutdown policy */
     } else if (!inactivityShutdownEnabled()) {
         /* Disabled by UI logic */
+    } else if (emergencyMode()) {
+        /* Disabled by ongoing emergency call */
     } else if (chargerState() == ChargerState::ChargerOn) {
         /* Does not make sense when charger is connected */
     } else if (dsmeState() != DSME_STATE_USER) {
@@ -398,8 +420,12 @@ void PinUi::considerBatteryEmptyShutdown()
 
     if (m_batteryEmptyShutdownRequested) {
         /* Already requested */
+    } else if (targetUnitActive()) {
+        /* Yield to DSME side shutdown policy */
     } else if (batteryStatus() != BatteryEmpty) {
         /* Battery is not empty */
+    } else if (emergencyMode()) {
+        /* Disabled by ongoing emergency call */
     } else if (chargerState() != ChargerState::ChargerOff) {
         /* Charger state is not known to be offline
          *
@@ -493,7 +519,7 @@ void PinUi::enabledAll()
 
 void PinUi::updateAcceptVisibility()
 {
-    if (!m_createdUI || m_emergencyMode)
+    if (!m_createdUI || emergencyMode())
         return;
 
     if (m_password->text().length() < DeviceLockSettings::instance()->minimumCodeLength()) {
@@ -625,6 +651,15 @@ void PinUi::dsmeStateChanged()
     }
 }
 
+void PinUi::targetUnitActiveChanged()
+{
+    if (targetUnitActive())
+        stopInactivityShutdownTimer();
+    else
+        startInactivityShutdownTimer();
+    considerBatteryEmptyShutdown();
+}
+
 void PinUi::updatesEnabledChanged()
 {
     bool prev = m_displayOn;
@@ -744,7 +779,7 @@ bool PinUi::askWatcher(int descriptor, uint32_t events)
 
 void PinUi::setEmergencyCallStatus(Call::Status status)
 {
-    if (!m_emergencyMode) {
+    if (!emergencyMode()) {
         // Not in emergency mode, do nothing
         return;
     }

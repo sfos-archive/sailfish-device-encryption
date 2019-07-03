@@ -1264,11 +1264,18 @@ bool Compositor::targetUnitActive() const
     return m_targetUnitActive;
 }
 
+void Compositor::targetUnitActiveChanged()
+{
+    /* This is a stub virtual function */
+    log_debug("ignoring: target unit active change");
+}
+
 void Compositor::updateTargetUnitActive(bool targetUnitActive)
 {
     if (m_targetUnitActive != targetUnitActive) {
         m_targetUnitActive = targetUnitActive;
         log_debug("m_targetUnitActive: " << m_targetUnitActive);
+        targetUnitActiveChanged();
         evaluateCompositorNameOwnerReplacingAllowed();
     }
 }
