@@ -2,6 +2,7 @@
 [Unit]
 Description=Encrypt home partition
 ConditionPathExists=/var/lib/sailfish-device-encryption/encrypt-home
+After=home-encryption-preparation.service
 
 [Service]
 Type=dbus
