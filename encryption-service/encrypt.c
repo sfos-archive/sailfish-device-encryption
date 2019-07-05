@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glib.h>
+#include <glib/gstdio.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -33,6 +34,9 @@
 #ifndef SYSTEMD_UNIT_DIR
 #define SYSTEMD_UNIT_DIR /etc/systemd/system/
 #endif
+
+#define TEMPORARY_KEY_FILE \
+    "/var/lib/sailfish-device-encryption/temporary-encryption-key"
 
 #define QUOTE(s) #s
 #define STR(s) QUOTE(s)
@@ -87,6 +91,7 @@ typedef struct {
     GDBusObjectManager *object_manager;
     UDisksBlock *block;
     gchar *passphrase;
+    gboolean passphrase_is_temporary;
     gchar *crypto_device_path;
     gchar *cleartext_device_uuid;
     gulong signal_handler;
@@ -302,9 +307,20 @@ static void format_complete(
     GVariant *arguments;
     invocation_data *data = user_data;
     GError *error = NULL;
+    int temporary_key_file;
 
     if (udisks_block_call_format_finish((UDisksBlock *)block, res, &error)) {
         set_status(ENCRYPTION_NEEDS_RESCAN);
+
+        if (data->passphrase_is_temporary) {
+            temporary_key_file = g_open(
+                    TEMPORARY_KEY_FILE,
+                    O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+            g_close(temporary_key_file, &error);
+            if (error)
+                g_error_free(error);
+        }
+
     } else {
         fprintf(stderr, "%s. Aborting.\n", error->message);
         end_encryption_to_failure(data);
@@ -553,7 +569,7 @@ static void got_bus(GObject *proxy, GAsyncResult *res, gpointer user_data)
     udisks_client_new(NULL, got_client, data);
 }
 
-gboolean start_to_encrypt(gchar *passphrase)
+gboolean start_to_encrypt(gchar *passphrase, gboolean passphrase_is_temporary)
 {
     invocation_data *data;
 
@@ -563,6 +579,7 @@ gboolean start_to_encrypt(gchar *passphrase)
     set_status(ENCRYPTION_IN_PREPARATION);
     data = g_new0(invocation_data, 1);
     data->passphrase = passphrase;
+    data->passphrase_is_temporary = passphrase_is_temporary;
     g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, data);
     return TRUE;
 }

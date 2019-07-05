@@ -6,6 +6,7 @@ if [ ! -e /etc/crypttab ]; then
 fi
 
 mkdir /tmp/home
+
 # Calculate 1/3 of /tmp to keep it free even after copying
 EXTRA_SPACE=$(( $(df -k /tmp | grep -Eo '[0-9]+ +[0-9]+ +[0-9]+ +[0-9]+% +/tmp$' | cut -d' ' -f1) / 3 ))
 # globs below miss files that start with two dots
@@ -31,8 +32,9 @@ else
         >&2 echo "Warning: Not enough space even for /home/nemo. Creating new."
         cp --archive /etc/skel /tmp/home/nemo
         chown --recursive nemo:nemo /tmp/home/nemo
+        chmod 750 /tmp/home/nemo
     fi
 fi
 
 usermod --home /tmp/home/nemo nemo
-systemctl stop home.mount
+systemctl stop home.mount || true

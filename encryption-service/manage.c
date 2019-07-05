@@ -5,7 +5,6 @@
  */
 
 #include <glib.h>
-#include <glib/gstdio.h>
 #include <gio/gio.h>
 #include <stdio.h>
 #include <fcntl.h>
@@ -14,8 +13,6 @@
 #include "manage.h"
 
 #define NEMO_UID 100000
-#define TEMPORARY_KEY_FILE \
-    "/var/lib/sailfish-device-encryption/temporary-encryption-key"
 
 typedef void (*job_handler)(GDBusProxy *proxy, guint32 id, gpointer user_data);
 
@@ -33,7 +30,6 @@ typedef struct {
     gulong signal_handler;
     GList *job_watches;
     guint task;
-    gboolean temporary_encryption_key;
 } manage_data;
 
 static inline void manage_data_free(manage_data *data)
@@ -250,18 +246,6 @@ static void on_signal_from_logind(
 
 static void terminate_user(manage_data *data)
 {
-    int encrypt_home;
-    GError *error = NULL;
-
-    if (data->temporary_encryption_key) {
-        encrypt_home = g_open(
-                TEMPORARY_KEY_FILE,
-                O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-        g_close(encrypt_home, &error);
-        if (error)
-            g_error_free(error);
-    }
-
     data->signal_handler = g_signal_connect(
             data->login_manager, "g-signal",
             G_CALLBACK(on_signal_from_logind), data);
@@ -365,11 +349,10 @@ static void got_bus(GObject *proxy, GAsyncResult *res, gpointer user_data)
             NULL, got_systemd_manager, user_data);
 }
 
-void finalize(GMainLoop *main_loop, gboolean temporary_encryption_key)
+void finalize(GMainLoop *main_loop)
 {
     manage_data *data = g_new0(manage_data, 1);
     data->main_loop = main_loop;
-    data->temporary_encryption_key = temporary_encryption_key;
     printf("Restarting user session with encrypted home.\n");
     g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, data);
 }
