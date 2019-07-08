@@ -2,28 +2,19 @@
  * Copyright (C) 2019 Jolla Ltd
  */
 
-#include "pin.h"
+#include "agent.h"
 #include "call.h"
-#include "logging.h"
+#include "compositor.h"
 #include "devicelocksettings.h"
+#include "logging.h"
+#include "pin.h"
 #include <sailfish-minui-dbus/eventloop.h>
-
-#include <unistd.h>
-#include <sys/inotify.h>
-#include <sys/socket.h>
-#include <sys/stat.h>
-#include <sys/un.h>
 
 #define ACCEPT_CODE 28
 #define CANCEL_CODE 1
 #define UDISKS_DBUS_NAME "org.freedesktop.UDisks2"
 #define UDISKS_UUID_PROPERTY "DM_UUID"
-#define TEMPORARY_KEY_FILE \
-    "/var/lib/sailfish-device-encryption/temporary-encryption-key"
-#define TEMPORARY_KEY "00000"
 #define EMERGENCY_MODE_TIMEOUT 5000
-
-static inline bool temporary_key_is_set();
 
 using namespace Sailfish;
 
@@ -32,20 +23,9 @@ static const MinUi::Color color_lightred(200, 0, 0, 255);
 static const MinUi::Color color_reddish(76, 0, 0, 255);
 static const MinUi::Color color_white(255, 255, 255, 255);
 
-PinUi* PinUi::s_instance = nullptr;
-
-PinUi* PinUi::instance()
-{
-    if (!s_instance) {
-        static MinUi::DBus::EventLoop eventLoop;
-        s_instance = new PinUi(&eventLoop);
-    }
-    return s_instance;
-}
-
 PinUi::~PinUi()
 {
-    window()->eventLoop()->cancelTimer(m_timer);
+    eventLoop()->cancelTimer(m_timer);
     m_timer = 0;
 
     stopInactivityShutdownTimer();
@@ -82,9 +62,9 @@ PinUi::~PinUi()
     m_exitNotification = nullptr;
 }
 
-PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
+PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     : MinUi::Window(eventLoop)
-    , Compositor(eventLoop)
+    , m_agent(agent)
     , m_password(nullptr)
     , m_key(nullptr)
     , m_label(nullptr)
@@ -92,12 +72,8 @@ PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
     , m_busyIndicator(nullptr)
     , m_timer(0)
     , m_canShowError(false)
-    , m_createdUI(false)
     , m_displayOn(true) // because minui unblanks screen on startup
-    , m_checkTemporaryKey(true)
     , m_dbus(nullptr)
-    , m_socket(nullptr)
-    , m_watcher(false)
     , m_emergencyButton(nullptr)
     , m_emergencyMode(false)
     , m_emergencyBackground(nullptr)
@@ -110,17 +86,7 @@ PinUi::PinUi(MinUi::DBus::EventLoop *eventLoop)
     , m_batteryEmptyShutdownTimer(0)
     , m_exitNotification(nullptr)
 {
-}
-
-void PinUi::createUI()
-{
-    if (m_createdUI)
-        return;
-
-    log_debug("create ui");
-    m_createdUI = true;
-
-    setBlankPreventWanted(true);
+    m_agent->setBlankPreventWanted(true);
 
     // Emergency mode rectangle
     m_emergencyBackground = new MinUi::Rectangle(this);
@@ -216,8 +182,7 @@ void PinUi::createUI()
                 createTimer(16, [this]() {
                     cancelTimer();
                     disableAll();
-                    startAskWatcher();
-                    sendPassword(m_password->text());
+                    m_agent->sendPassword(m_password->text());
                 });
             }
         } else if (code == CANCEL_CODE) {
@@ -227,14 +192,14 @@ void PinUi::createUI()
             } else {
                 // Cancel pressed, get out of the emergency call mode
                 if (m_timer) {
-                    eventLoop()->cancelTimer(m_timer);
+                    window()->eventLoop()->cancelTimer(m_timer);
                     m_timer = 0;
                 }
                 setEmergencyMode(false);
             }
         } else if (character) {
             if (m_timer) {
-                eventLoop()->cancelTimer(m_timer);
+                window()->eventLoop()->cancelTimer(m_timer);
                 m_timer = 0;
             }
             if (m_warningLabel) {
@@ -357,7 +322,7 @@ void PinUi::stopInactivityShutdownTimer()
 {
     if (m_inactivityShutdownTimer) {
         log_debug("inactivity shutdown timer: stopped");
-        window()->eventLoop()->cancelTimer(m_inactivityShutdownTimer);
+        eventLoop()->cancelTimer(m_inactivityShutdownTimer);
         m_inactivityShutdownTimer = 0;
     }
 }
@@ -366,20 +331,20 @@ void PinUi::startInactivityShutdownTimer()
 {
     if (m_inactivityShutdownTimer) {
         /* Already running */
-    } else if (targetUnitActive()) {
+    } else if (m_agent->targetUnitActive()) {
         /* Yield to DSME side shutdown policy */
     } else if (!inactivityShutdownEnabled()) {
         /* Disabled by UI logic */
     } else if (emergencyMode()) {
         /* Disabled by ongoing emergency call */
-    } else if (chargerState() == ChargerState::ChargerOn) {
+    } else if (m_agent->chargerState() == Compositor::ChargerState::ChargerOn) {
         /* Does not make sense when charger is connected */
-    } else if (dsmeState() != DSME_STATE_USER) {
+    } else if (m_agent->dsmeState() != Compositor::DsmeState::DSME_STATE_USER) {
         /* Already rebooting / shutting down / something */
     } else {
         log_debug("inactivity shutdown timer: started");
         m_inactivityShutdownTimer =
-            window()->eventLoop()->createTimer(inactivityShutdownDelay, [this]() {
+            eventLoop()->createTimer(inactivityShutdownDelay, [this]() {
                 stopInactivityShutdownTimer();
                 onInactivityShutdownTimer();
             });
@@ -398,7 +363,7 @@ void PinUi::onInactivityShutdownTimer()
 {
     log_debug("inactivity shutdown timer: triggered");
     setInactivityShutdownEnabled(false);
-    sendShutdownRequestToDsme();
+    m_agent->sendShutdownRequestToDsme();
 }
 
 void PinUi::considerBatteryEmptyShutdown()
@@ -420,13 +385,13 @@ void PinUi::considerBatteryEmptyShutdown()
 
     if (m_batteryEmptyShutdownRequested) {
         /* Already requested */
-    } else if (targetUnitActive()) {
+    } else if (m_agent->targetUnitActive()) {
         /* Yield to DSME side shutdown policy */
-    } else if (batteryStatus() != BatteryEmpty) {
+    } else if (m_agent->batteryStatus() != Compositor::BatteryStatus::BatteryEmpty) {
         /* Battery is not empty */
     } else if (emergencyMode()) {
         /* Disabled by ongoing emergency call */
-    } else if (chargerState() != ChargerState::ChargerOff) {
+    } else if (m_agent->chargerState() != Compositor::ChargerState::ChargerOff) {
         /* Charger state is not known to be offline
          *
          * Note that we must not shutdown while charger
@@ -437,7 +402,7 @@ void PinUi::considerBatteryEmptyShutdown()
          * time to settle down to stable state in the early
          * bootup - handled via 10 second timer delay below.
          */
-    } else if (dsmeState() != DSME_STATE_USER) {
+    } else if (m_agent->dsmeState() != Compositor::DsmeState::DSME_STATE_USER) {
         /* Already rebooting / shutting down / something */
     } else {
         wantTimer = true;
@@ -449,7 +414,7 @@ void PinUi::considerBatteryEmptyShutdown()
         if (wantTimer) {
             log_debug("battery empty shutdown timer: started");
             m_batteryEmptyShutdownTimer =
-                window()->eventLoop()->createTimer(batteryEmptyShutdownDelay, [this]() {
+                eventLoop()->createTimer(batteryEmptyShutdownDelay, [this]() {
                     cancelBatteryEmptyShutdown();
                     onBatteryEmptyShutdown();
                 });
@@ -463,7 +428,7 @@ void PinUi::cancelBatteryEmptyShutdown()
 {
     if (m_batteryEmptyShutdownTimer) {
         log_debug("battery empty shutdown timer: stopped");
-        window()->eventLoop()->cancelTimer(m_batteryEmptyShutdownTimer);
+        eventLoop()->cancelTimer(m_batteryEmptyShutdownTimer);
         m_batteryEmptyShutdownTimer = 0;
     }
 }
@@ -476,7 +441,7 @@ void PinUi::onBatteryEmptyShutdown()
     m_batteryEmptyShutdownRequested = true;
 
     /* Send shutdown request */
-    sendShutdownRequestToDsme();
+    m_agent->sendShutdownRequestToDsme();
 }
 
 MinUi::Label *PinUi::createLabel(const char *name, int y)
@@ -491,9 +456,6 @@ MinUi::Label *PinUi::createLabel(const char *name, int y)
 
 void PinUi::reset()
 {
-    if (!m_createdUI)
-        return;
-
     m_password->setText("");
     delete m_warningLabel;
     m_warningLabel = nullptr;
@@ -519,7 +481,7 @@ void PinUi::enabledAll()
 
 void PinUi::updateAcceptVisibility()
 {
-    if (!m_createdUI || emergencyMode())
+    if (emergencyMode())
         return;
 
     if (m_password->text().length() < DeviceLockSettings::instance()->minimumCodeLength()) {
@@ -529,38 +491,15 @@ void PinUi::updateAcceptVisibility()
     }
 }
 
-int PinUi::execute(const char *socket)
+void PinUi::newAskFile()
 {
-    m_socket = socket;
-    if (m_checkTemporaryKey && temporary_key_is_set()) {
-        // Send temporary key
-        createTimer(16, [this]() {
-            cancelTimer();
-            disableAll();
-            startAskWatcher();
-            sendPassword(TEMPORARY_KEY);
-        });
-    } else {
-        // Not using temporary key, don't check it again
-        m_checkTemporaryKey = false;
-    }
-    return window()->eventLoop()->execute();
-}
-
-void PinUi::exit(int value)
-{
-    if (m_timer) {
-        eventLoop()->cancelTimer(m_timer);
-        m_timer = 0;
-    }
-    eventLoop()->exit(value);
+    // New file moved to the ask directory, assume password failed
+    if (!emergencyMode())
+        showError();
 }
 
 void PinUi::showError()
 {
-    if (!m_createdUI)
-        return;
-
     reset();
     if (!m_warningLabel && m_canShowError) {
         //% "Incorrect security code"
@@ -579,7 +518,7 @@ void PinUi::displayStateChanged()
 
 void PinUi::chargerStateChanged()
 {
-    if (chargerState() == ChargerState::ChargerOn)
+    if (m_agent->chargerState() == Compositor::ChargerState::ChargerOn)
         stopInactivityShutdownTimer();
     else
         startInactivityShutdownTimer();
@@ -604,9 +543,9 @@ void PinUi::batteryLevelChanged()
 void PinUi::dsmeStateChanged()
 {
     /* Re-evaluate shutdown conditions */
-    switch (dsmeState())
+    switch (m_agent->dsmeState())
     {
-    case DSME_STATE_USER:
+    case Compositor::DsmeState::DSME_STATE_USER:
         startInactivityShutdownTimer();
         considerBatteryEmptyShutdown();
         break;
@@ -618,7 +557,7 @@ void PinUi::dsmeStateChanged()
     }
 
     /* Re-evaluate UI state */
-    if (shuttingDown() && !m_exitNotification) {
+    if (m_agent->shuttingDown() && !m_exitNotification) {
         // Hide everything
         if (m_password)
             m_password->setVisible(false);
@@ -639,7 +578,7 @@ void PinUi::dsmeStateChanged()
         if (m_speakerButton)
             m_speakerButton->setVisible(false);
         // Show either reboot or poweroff notification
-        if (shuttingDownToReboot()) {
+        if (m_agent->shuttingDownToReboot()) {
             //% "One moment..."
             m_exitNotification = new MinUi::Label(qtTrId("sailfish-device-encryption-unlock-ui-la-rebooting"), this);
         } else {
@@ -653,7 +592,7 @@ void PinUi::dsmeStateChanged()
 
 void PinUi::targetUnitActiveChanged()
 {
-    if (targetUnitActive())
+    if (m_agent->targetUnitActive())
         stopInactivityShutdownTimer();
     else
         startInactivityShutdownTimer();
@@ -663,7 +602,7 @@ void PinUi::targetUnitActiveChanged()
 void PinUi::updatesEnabledChanged()
 {
     bool prev = m_displayOn;
-    m_displayOn = updatesEnabled();
+    m_displayOn = m_agent->updatesEnabled();
 
     if (!m_displayOn) {
         log_debug("hide");
@@ -683,98 +622,7 @@ void PinUi::updatesEnabledChanged()
     if (m_displayOn) {
         log_debug("show");
         window()->setVisible(true);
-        createUI();
     }
-}
-
-void PinUi::sendPassword(const std::string& password)
-{
-    char buf[DeviceLockSettings::instance()->maximumCodeLength() + 2];
-    int sd, len;
-    struct sockaddr_un name;
-
-    if (password.length() > 0) {
-        buf[0] = '+';
-        strncpy(buf + 1, password.c_str(), sizeof(buf) - 1);
-        buf[sizeof(buf) - 1] = '\0';
-        len = strlen(buf);
-    } else {  // Assume cancelled
-        buf[0] = '-';
-        len = 1;
-    }
-
-    if ((sd = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) {
-        log_err("socket open failed");
-        return;
-    }
-
-    name.sun_family = AF_UNIX;
-    strncpy(name.sun_path, m_socket, sizeof(name.sun_path));
-    name.sun_path[sizeof(name.sun_path) - 1] = '\0';
-
-    if (connect(sd, (struct sockaddr *)&name, SUN_LEN(&name)) != 0) {
-        log_err("socket connect failed");
-        close(sd);
-        return;
-    }
-
-    if (send(sd, buf, len, 0) < len) {
-        log_err("socket send failed");
-        close(sd);
-        return;
-    }
-
-    close(sd);
-}
-
-void PinUi::startAskWatcher()
-{
-    if (!m_watcher) {
-        int fd = inotify_init1(IN_NONBLOCK);
-        if (fd < 0) {
-            log_err("inotify init failed");
-            return;
-        }
-        int askWatch = inotify_add_watch(fd, ask_dir, IN_MOVED_TO);
-        if (askWatch < 0) {
-            log_err("inotify watch add failed");
-            return;
-        }
-
-        std::function<NotifierCallbackType> callback(askWatcher);
-        eventLoop()->addNotifierCallback(fd, callback);
-
-        m_watcher = true;
-    }
-}
-
-bool PinUi::askWatcher(int descriptor, uint32_t events)
-{
-    (void)events;
-
-    // Flush inotify events
-    int available;
-    if (!ioctl(descriptor, FIONREAD, &available)) {
-        char buf[available];
-        if (read(descriptor, buf, available) == -1) {
-            // really don't care
-        }
-    }
-
-    PinUi *instance = PinUi::instance();
-    // New file moved to the ask directory, assume password failed
-    if (instance->m_checkTemporaryKey) {
-        // Passphrase is not temporary key, ask user for key
-        instance->m_checkTemporaryKey = false;
-        instance->enabledAll();
-    } else {
-        instance->showError();
-    }
-    // Timer to exit the mainloop
-    instance->createTimer(100, []() {
-        PinUi::instance()->exit(0);
-    });
-    return true;
 }
 
 void PinUi::setEmergencyCallStatus(Call::Status status)
@@ -845,10 +693,4 @@ void PinUi::cancelTimer()
         eventLoop()->cancelTimer(m_timer);
         m_timer = 0;
     }
-}
-
-static inline bool temporary_key_is_set()
-{
-    struct stat buf;
-    return stat(TEMPORARY_KEY_FILE, &buf) == 0;
 }

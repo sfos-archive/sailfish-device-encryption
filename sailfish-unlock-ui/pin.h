@@ -5,36 +5,25 @@
 #ifndef UNLOCK_AGENT_PIN_H_
 #define UNLOCK_AGENT_PIN_H_
 #include <sailfish-minui/ui.h>
-#include <sailfish-minui/eventloop.h>
+#include <sailfish-minui-dbus/eventloop.h>
 #include <sailfish-mindbus/object.h>
 
 #include "call.h"
-#include "compositor.h"
 
 namespace Sailfish {
 
-static const char *ask_dir = "/run/systemd/ask-password/";
+class Agent;
 
-class PinUi : public MinUi::Window, public Compositor
+class PinUi : public MinUi::Window
 {
 public:
-    /**
-     * Singleton constructor
-     */
-    static PinUi* instance();
+    PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop);
+    virtual ~PinUi();
 
     /**
-     * Start the eventloop
-     * @param socket Socket where to send the password
-     * @return Eventloop exit code
+     * Handle new ask files
      */
-    int execute(const char* socket);
-
-    /**
-     * Exit the eventloop
-     * @param value Exit value
-     */
-    void exit(int value);
+    void newAskFile();
 
     void showError();
 
@@ -58,8 +47,6 @@ public:
     };
 
 private:
-    PinUi(MinUi::DBus::EventLoop *eventLoop);
-    virtual ~PinUi();
     MinUi::Label *createLabel(const char *name, int y);
     void setEmergencyCallStatus(Call::Status status);
     void createTimer(int interval, const std::function<void()> &callback);
@@ -71,22 +58,21 @@ public:
      */
     void reset();
 
+    void displayStateChanged();
+    void chargerStateChanged();
+    void batteryStatusChanged();
+    void batteryLevelChanged();
+    void updatesEnabledChanged();
+    void dsmeStateChanged();
+    void targetUnitActiveChanged();
+
 private:
     void disableAll();
     void enabledAll();
 
     void updateAcceptVisibility();
     void createUI();
-    virtual void displayStateChanged();
-    virtual void chargerStateChanged();
-    virtual void batteryStatusChanged();
-    virtual void batteryLevelChanged();
-    virtual void updatesEnabledChanged();
-    virtual void dsmeStateChanged();
-    virtual void targetUnitActiveChanged();
-    void sendPassword(const std::string& password);
-    void startAskWatcher();
-    static bool askWatcher(int descriptor, uint32_t events);
+
     bool emergencyMode() const;
     void setEmergencyMode(bool emergency);
     void emergencyModeChanged();
@@ -103,6 +89,8 @@ private:
     void onBatteryEmptyShutdown();
 
 private:
+    Agent *m_agent;
+
     MinUi::PasswordField *m_password;
     MinUi::Keypad *m_key;
     MinUi::Label *m_label;
@@ -145,13 +133,8 @@ private:
     MinUi::Palette m_palette;
     int m_timer;
     bool m_canShowError;
-    bool m_createdUI;
     bool m_displayOn;
-    bool m_checkTemporaryKey;
-    static PinUi *s_instance;
     MinDBus::Object *m_dbus;
-    const char *m_socket;
-    bool m_watcher;
     MinUi::IconButton *m_emergencyButton;
     bool m_emergencyMode;
     MinUi::Rectangle *m_emergencyBackground;
