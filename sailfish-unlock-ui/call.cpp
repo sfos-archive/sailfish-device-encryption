@@ -31,8 +31,8 @@ Call::Call(MinUi::DBus::EventLoop *eventLoop)
     , m_statusCallback(nullptr)
     , m_callObjectPath("")
     , m_speakerEnabled(false)
-    , m_ofono_status(OfonoIdle)
-    , m_resource_status(ResourcesIdle)
+    , m_ofonoStatus(OfonoIdle)
+    , m_resourceStatus(ResourcesIdle)
     , m_rc(nullptr)
     , m_rset(nullptr)
     , m_reqno(0)
@@ -42,7 +42,8 @@ Call::Call(MinUi::DBus::EventLoop *eventLoop)
 Call::~Call()
 {
     endCall();
-    disconnectResources();
+    if (m_resourceStatus == ResourceStatus::ResourcesAcquired)
+        disconnectResources();
     if (m_voiceCallManager) {
         delete m_voiceCallManager;
         m_voiceCallManager = nullptr;
@@ -72,7 +73,7 @@ void Call::makeCall(std::string &phoneNumber, Callback callback)
             return;
         }
     }
-    if (m_ofono_status != OfonoIdle && m_ofono_status != OfonoError) {
+    if (m_ofonoStatus != OfonoIdle && m_ofonoStatus != OfonoError) {
         log_warning("Already calling");
         return;
     }
@@ -105,7 +106,7 @@ void Call::endCall()
 
 bool Call::calling()
 {
-    return m_ofono_status == OfonoCalling;
+    return m_ofonoStatus == OfonoCalling;
 }
 
 void Call::enableSpeaker()
@@ -150,7 +151,7 @@ void Call::placeCall()
         bringModemOnline();
         return;
     }
-    m_ofono_status = OfonoInitializing;
+    m_ofonoStatus = OfonoInitializing;
     // MinDBus doesn't handle container types
     DBusMessage *message = dbus_message_new_method_call(OFONO_SERVICE,
             OFONO_MODEM_MANAGER_PATH, OFONO_MODEM_MANAGER_INTERFACE, "GetAvailableModems");
@@ -158,7 +159,7 @@ void Call::placeCall()
     if (!dbus_connection_send_with_reply(m_systemBus, message, &call, -1) || !call ||
             !setPendingCallNotify(call, std::mem_fn(&Call::handleModemPath))) {
         log_err("Could not read available modems");
-        m_ofono_status = OfonoError;
+        m_ofonoStatus = OfonoError;
         m_statusCallback(Error);
     }
     if (call)
@@ -173,7 +174,7 @@ void Call::handleModemPath(DBusPendingCall *call)
     if (dbus_set_error_from_message(&error, message)) {
         log_err("Could not fetch modem object path. Can not call!");
         log_err(error.name << ": " << error.message);
-        m_ofono_status = OfonoError;
+        m_ofonoStatus = OfonoError;
         m_statusCallback(Error);
 
     } else {
@@ -196,7 +197,7 @@ void Call::handleModemPath(DBusPendingCall *call)
                         releaseResources();
                         m_callObjectPath.assign("");
                         disableEmergencyCallMode();
-                        m_ofono_status = OfonoIdle;
+                        m_ofonoStatus = OfonoIdle;
                         m_statusCallback(Ended);
                     } else {
                         log_debug("Got unhandled call removal for " << call);
@@ -232,7 +233,7 @@ void Call::bringModemOnline()
     if (!dbus_connection_send_with_reply(m_systemBus, message, &call, -1) || !call ||
             !setPendingCallNotify(call, std::mem_fn(&Call::handleModemOnline))) {
         log_err("Could not set modem online! Can not call!");
-        m_ofono_status = OfonoError;
+        m_ofonoStatus = OfonoError;
         m_statusCallback(Error);
     }
     if (call)
@@ -247,7 +248,7 @@ void Call::handleModemOnline(DBusPendingCall *call)
     if (dbus_set_error_from_message(&error, message)) {
         log_err("Could not set modem online! Can not call!");
         log_err(error.name << ": " << error.message);
-        m_ofono_status = OfonoError;
+        m_ofonoStatus = OfonoError;
         m_statusCallback(Error);
     } else {
         log_debug("Modem online!");
@@ -265,7 +266,7 @@ void Call::checkForNonEmergencyNumber() {
     if (!dbus_connection_send_with_reply(m_systemBus, message, &call, -1) || !call ||
             !setPendingCallNotify(call, std::mem_fn(&Call::handleEmergencyNumbersProperty))) {
         log_err("Could not read emergency numbers. Not checking the number.");
-        m_ofono_status = OfonoReady;
+        m_ofonoStatus = OfonoReady;
         dial();
     }
     if (call)
@@ -314,7 +315,7 @@ void Call::handleEmergencyNumbersProperty(DBusPendingCall *call) {
                     if (strcmp(dbus_message_iter_get_signature(&variant), "as") != 0) {
                         log_err("Wrong type, expected array! Not checking the number.");
                     } else if (!checkForEmergencyNumber(variant)) {
-                        m_ofono_status = OfonoIdle;
+                        m_ofonoStatus = OfonoIdle;
                         m_statusCallback(InvalidNumber);
                         is_ok = false;
                         log_debug("Tried to call to non-emergency number. Prevented.");
@@ -330,7 +331,7 @@ void Call::handleEmergencyNumbersProperty(DBusPendingCall *call) {
     }
 
     if (is_ok) {
-        m_ofono_status = OfonoReady;
+        m_ofonoStatus = OfonoReady;
         dial();
     }
 }
@@ -351,13 +352,13 @@ bool Call::checkForEmergencyNumber(DBusMessageIter &variant)
 
 void Call::dial()
 {
-    if (m_ofono_status != OfonoReady) {
+    if (m_ofonoStatus != OfonoReady) {
         // Wait until ofono is ready
         log_debug("Dial called but ofono was not yet ready to call.");
         return;
     }
 
-    switch (m_resource_status) {
+    switch (m_resourceStatus) {
     case ResourcesConnecting:
     case ResourcesAcquiring:
         // Wait until resources are ready or have failed.
@@ -369,13 +370,13 @@ void Call::dial()
         call->onFinished([this](MinDBus::ObjectPath call) {
             log_debug("Dialing " << m_phoneNumber << ", call " << call);
             m_callObjectPath.assign(call);
-            m_ofono_status = OfonoCalling;
+            m_ofonoStatus = OfonoCalling;
             m_statusCallback(Calling);
         });
         call->onError([this](const char *name, const char *message) {
             log_err("Error while dialing: " << name << ": " << message);
             disableEmergencyCallMode();
-            m_ofono_status = OfonoError;
+            m_ofonoStatus = OfonoError;
             m_statusCallback(Error);
         });
         break;
@@ -398,13 +399,13 @@ void Call::hangUp()
     call->onFinished([this] {
         log_debug("Ofono ended call");
         m_callObjectPath.assign("");
-        m_ofono_status = OfonoIdle;
+        m_ofonoStatus = OfonoIdle;
         m_statusCallback(Ended);
     });
     call->onError([this](const char *name, const char *message) {
         log_err("While ending call: " << name << ": " << message);
         m_callObjectPath.assign("");
-        m_ofono_status = OfonoError;
+        m_ofonoStatus = OfonoError;
         m_statusCallback(Error);
     });
 }
@@ -432,7 +433,7 @@ void Call::startAcquiringResources()
         m_rc = resproto_init(RESPROTO_ROLE_CLIENT, RESPROTO_TRANSPORT_DBUS, NULL, m_systemBus);
         if (!m_rc) {
             log_debug("Resproto init failed");
-            m_resource_status = ResourcesError;
+            m_resourceStatus = ResourcesError;
             m_statusCallback(Error);
         } else {
             connectResources();
@@ -445,10 +446,10 @@ void Call::releaseResources()
     // End call and release "call" class
     resmsg_t msg;
 
-    if (m_rset == nullptr || m_resource_status == ResourcesReleasing)
+    if (m_rset == nullptr || m_resourceStatus == ResourcesReleasing)
         return;
 
-    m_resource_status = ResourcesReleasing;
+    m_resourceStatus = ResourcesReleasing;
 
     msg.possess.type = RESMSG_RELEASE;
     msg.possess.id = 1;
@@ -474,7 +475,7 @@ void Call::connectResources()
     msg.record.klass = (char *)"call";
     msg.record.mode = RESMSG_MODE_AUTO_RELEASE;
 
-    m_resource_status = ResourcesConnecting;
+    m_resourceStatus = ResourcesConnecting;
     m_rset = resconn_connect(m_rc, &msg, resourceStatusHandler);
     m_rset->userdata = this;
 }
@@ -492,10 +493,10 @@ void Call::acquiringResources()
     int success = resproto_send_message(m_rset, &msg, resourceStatusHandler);
     if (!success) {
         log_err("Could not acquire resources");
-        m_resource_status = ResourcesError;
+        m_resourceStatus = ResourcesError;
         m_statusCallback(Error);
     } else {
-        m_resource_status = ResourcesAcquired;
+        m_resourceStatus = ResourcesAcquired;
         dial();
     }
 }
@@ -509,13 +510,13 @@ void Call::resourceStatusHandler(resset_t *rset, resmsg_t *msg)
         log_err("Resource status message of wrong type: " << MSGTYPE(msg->type));
 
     if (msg->type == RESMSG_STATUS && msg->status.errcod == 0) {
-        if (instance->m_resource_status == ResourcesConnecting) {
-            instance->m_resource_status = ResourcesAcquiring;
+        if (instance->m_resourceStatus == ResourcesConnecting) {
+            instance->m_resourceStatus = ResourcesAcquiring;
             instance->acquiringResources();
-        } else if (instance->m_resource_status == ResourcesReleasing) {
-            instance->m_resource_status = ResourcesIdle;
-        } else if (instance->m_resource_status == ResourcesDisconnecting) {
-            instance->m_resource_status = ResourcesIdle;
+        } else if (instance->m_resourceStatus == ResourcesReleasing) {
+            instance->m_resourceStatus = ResourcesIdle;
+        } else if (instance->m_resourceStatus == ResourcesDisconnecting) {
+            instance->m_resourceStatus = ResourcesIdle;
             instance->m_rset = nullptr;
             instance->m_rc = nullptr;
         }
@@ -531,7 +532,7 @@ void Call::disconnectResources()
     msg.possess.id = 1;
     msg.possess.reqno = ++m_reqno;
 
-    m_resource_status = ResourcesDisconnecting;
+    m_resourceStatus = ResourcesDisconnecting;
     resconn_disconnect(m_rset, &msg, resourceStatusHandler);
 }
 

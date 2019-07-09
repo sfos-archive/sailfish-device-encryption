@@ -95,7 +95,7 @@ private:
         OfonoError
     };
 
-    OfonoStatus m_ofono_status;
+    OfonoStatus m_ofonoStatus;
 
     enum ResourceStatus {
         ResourcesIdle,
@@ -107,7 +107,7 @@ private:
         ResourcesError
     };
 
-    ResourceStatus m_resource_status;
+    ResourceStatus m_resourceStatus;
 
     resconn_t *m_rc;
     resset_t *m_rset;
