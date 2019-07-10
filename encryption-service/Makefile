@@ -5,6 +5,8 @@ override CFLAGS += $(shell pkg-config --cflags udisks2)
 LIBS += $(shell pkg-config --libs udisks2)
 override CFLAGS += $(shell pkg-config --cflags libdbusaccess)
 LIBS += $(shell pkg-config --libs libdbusaccess)
+override CFLAGS += $(shell pkg-config --cflags openssl)
+LIBS += $(shell pkg-config --libs openssl)
 
 BINDIR = /usr/libexec
 DATADIR = /usr/share/sailfish-device-encryption

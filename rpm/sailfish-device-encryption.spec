@@ -18,15 +18,16 @@ BuildRequires: qt5-qttools-linguist
 BuildRequires: sailfish-minui-devel >= 0.0.23
 BuildRequires: sailfish-minui-dbus-devel
 BuildRequires: sailfish-minui-label-tool
+BuildRequires: pkgconfig(dsme)
+BuildRequires: pkgconfig(dsme_dbus_if)
 BuildRequires: pkgconfig(glib-2.0)
 BuildRequires: pkgconfig(libcryptsetup)
 BuildRequires: pkgconfig(libdbusaccess)
 BuildRequires: pkgconfig(libsystemd-daemon)
 BuildRequires: pkgconfig(libresource)
 BuildRequires: pkgconfig(mce)
-BuildRequires: pkgconfig(dsme)
-BuildRequires: pkgconfig(dsme_dbus_if)
 BuildRequires: pkgconfig(ohm-ext-route)
+BuildRequires: pkgconfig(openssl)
 BuildRequires: pkgconfig(udisks2)
 Requires:      %{name}-unlock-ui
 Requires:      %{name}-service
