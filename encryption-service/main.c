@@ -9,7 +9,8 @@
 
 #define ENCRYPTION_ERROR_FAILED encryption_error_failed()
 #define ENCRYPTION_ERROR_BUSY encryption_error_busy()
-#define QUIT_TIMEOUT 5
+#define TEMPORARY_PASSPHRASE "00000"
+#define QUIT_TIMEOUT 60
 
 GQuark encryption_error_failed(void)
 {
@@ -22,13 +23,34 @@ GQuark encryption_error_busy(void)
 }
 
 GMainLoop *main_loop;
+gchar *saved_passphrase = NULL;
+erase_t erase_type;
+
+static gboolean call_prepare(gchar *passphrase, erase_t erase, GError **error)
+{
+    if (get_encryption_status() == ENCRYPTION_NOT_STARTED) {
+        saved_passphrase = passphrase;
+        erase_type = erase;
+        return TRUE;
+    } else {
+        g_free(passphrase);
+        g_set_error_literal(
+                error, ENCRYPTION_ERROR_BUSY, 0,
+                "Encryption is already work in progress");
+        return FALSE;
+    }
+}
 
 static gboolean call_encrypt(
-        gchar *passphrase,
-        gboolean passphrase_is_temporary,
         GError **error)
 {
-    if (!start_to_encrypt(passphrase, passphrase_is_temporary)) {
+    gchar *passphrase = saved_passphrase;
+    gboolean passphrase_is_temporary = FALSE;
+    if (saved_passphrase == NULL) {
+        passphrase_is_temporary = TRUE;
+        passphrase = g_strdup(TEMPORARY_PASSPHRASE);
+    }
+    if (!start_to_encrypt(passphrase, passphrase_is_temporary, erase_type)) {
         g_set_error_literal(
                 error, ENCRYPTION_ERROR_FAILED, 0,
                 "Starting encryption failed");
@@ -54,7 +76,8 @@ static gboolean call_finalize(GError **error)
 }
 
 static gboolean quit_if_idle(gpointer user_data) {
-    if (get_encryption_status() == ENCRYPTION_NOT_STARTED)
+    if (get_encryption_status() == ENCRYPTION_NOT_STARTED &&
+            saved_passphrase == NULL)
         g_main_loop_quit(main_loop);
     return FALSE;
 }
@@ -83,7 +106,7 @@ int main(int argc, char **argv)
     main_loop = g_main_loop_new(NULL, FALSE);
 
     init_encryption_service(status_changed_handler);
-    init_dbus(call_encrypt, call_finalize);
+    init_dbus(call_prepare, call_encrypt, call_finalize);
     g_timeout_add_seconds(QUIT_TIMEOUT, quit_if_idle, NULL);
     g_main_loop_run(main_loop);
 

@@ -92,6 +92,7 @@ typedef struct {
     UDisksBlock *block;
     gchar *passphrase;
     gboolean passphrase_is_temporary;
+    erase_t erase;
     gchar *crypto_device_path;
     gchar *cleartext_device_uuid;
     gulong signal_handler;
@@ -357,6 +358,9 @@ static inline void start_format_luks(invocation_data *data)
             &builder, "{sv}", "dry-run-first", g_variant_new_boolean(TRUE));
     g_variant_builder_add(
             &builder, "{sv}", "tear-down", g_variant_new_boolean(TRUE));
+    if (data->erase == ERASE_WITH_ZEROS)
+        g_variant_builder_add(
+                &builder, "{sv}", "erase", g_variant_new_string("zero"));
 
     g_variant_builder_init(&subbuilder, G_VARIANT_TYPE("a(sa{sv})"));
     g_variant_builder_open(&subbuilder, G_VARIANT_TYPE("(sa{sv})"));
@@ -569,17 +573,22 @@ static void got_bus(GObject *proxy, GAsyncResult *res, gpointer user_data)
     udisks_client_new(NULL, got_client, data);
 }
 
-gboolean start_to_encrypt(gchar *passphrase, gboolean passphrase_is_temporary)
+gboolean start_to_encrypt(
+        gchar *passphrase,
+        gboolean passphrase_is_temporary,
+        erase_t erase)
 {
     invocation_data *data;
 
-    if (status != ENCRYPTION_NOT_STARTED)
+    // TODO: ERASE_WITH_RANDOM
+    if (status != ENCRYPTION_NOT_STARTED || erase == ERASE_WITH_RANDOM)
         return FALSE;
 
     set_status(ENCRYPTION_IN_PREPARATION);
     data = g_new0(invocation_data, 1);
     data->passphrase = passphrase;
     data->passphrase_is_temporary = passphrase_is_temporary;
+    data->erase = erase;
     g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, data);
     return TRUE;
 }
