@@ -22,6 +22,7 @@ PKGCONFIG += \
     ohm-ext-route
 
 HEADERS += \
+    agent.h \
     call.h \
     compositor.h \
     devicelocksettings.h \
@@ -29,6 +30,7 @@ HEADERS += \
 
 SOURCES += \
     main.cpp \
+    agent.cpp \
     call.cpp \
     compositor.cpp \
     devicelocksettings.cpp \
