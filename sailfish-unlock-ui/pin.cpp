@@ -167,8 +167,8 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
         if (code == ACCEPT_CODE) {
             if (emergencyMode()) {
                 if (m_call.calling()) {
-                        // End the ongoing call
-                        m_call.endCall();
+                    // End the ongoing call
+                    m_call.endCall();
                 } else {
                     // Make the call
                     std::string number = m_password->text();
@@ -274,6 +274,7 @@ void PinUi::emergencyModeChanged()
             m_speakerButton->setVisible(true);
         }
     } else {
+        m_call.endCall(); // Just in case
         m_emergencyBackground->setVisible(false);
         m_emergencyLabel->setVisible(false);
         m_label->setVisible(true);
