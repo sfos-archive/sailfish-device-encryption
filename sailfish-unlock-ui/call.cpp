@@ -106,7 +106,14 @@ void Call::endCall()
 
 bool Call::calling()
 {
-    return m_ofonoStatus == OfonoCalling;
+    switch (m_ofonoStatus) {
+    case OfonoInitializing:
+    case OfonoReady:
+    case OfonoCalling:
+        return true;
+    default:
+        return false;
+    }
 }
 
 void Call::enableSpeaker()
@@ -145,13 +152,13 @@ void Call::toggleSpeaker()
 
 void Call::placeCall()
 {
+    m_ofonoStatus = OfonoInitializing;
     // Place the emergency call with ofono
     log_debug("Placing call with ofono");
     if (m_voiceCallManager) {
         bringModemOnline();
         return;
     }
-    m_ofonoStatus = OfonoInitializing;
     // MinDBus doesn't handle container types
     DBusMessage *message = dbus_message_new_method_call(OFONO_SERVICE,
             OFONO_MODEM_MANAGER_PATH, OFONO_MODEM_MANAGER_INTERFACE, "GetAvailableModems");
@@ -266,8 +273,10 @@ void Call::checkForNonEmergencyNumber() {
     if (!dbus_connection_send_with_reply(m_systemBus, message, &call, -1) || !call ||
             !setPendingCallNotify(call, std::mem_fn(&Call::handleEmergencyNumbersProperty))) {
         log_err("Could not read emergency numbers. Not checking the number.");
-        m_ofonoStatus = OfonoReady;
-        dial();
+        if (m_ofonoStatus == OfonoInitializing) {
+            m_ofonoStatus = OfonoReady;
+            dial();
+        }
     }
     if (call)
         dbus_pending_call_unref(call);
@@ -330,7 +339,7 @@ void Call::handleEmergencyNumbersProperty(DBusPendingCall *call) {
         log_debug("Empty phone number given, calling default " << DEFAULT_EMERGENCY_NUMBER);
     }
 
-    if (is_ok) {
+    if (is_ok && m_ofonoStatus == OfonoInitializing) {
         m_ofonoStatus = OfonoReady;
         dial();
     }
@@ -365,12 +374,12 @@ void Call::dial()
         break;
     case ResourcesAcquired: {
         enableEmergencyCallMode();
+        m_ofonoStatus = OfonoCalling;
         auto call = m_voiceCallManager->call<MinDBus::ObjectPath>("Dial",
                 m_phoneNumber.empty() ? DEFAULT_EMERGENCY_NUMBER : m_phoneNumber.c_str(), HIDE_CALLERID_DEFAULT);
         call->onFinished([this](MinDBus::ObjectPath call) {
             log_debug("Dialing " << m_phoneNumber << ", call " << call);
             m_callObjectPath.assign(call);
-            m_ofonoStatus = OfonoCalling;
             m_statusCallback(Calling);
         });
         call->onError([this](const char *name, const char *message) {
@@ -395,6 +404,10 @@ void Call::hangUp()
 {
     // Tell ofono to hang up
     disableEmergencyCallMode();
+    if (m_ofonoStatus != OfonoCalling) {
+        m_ofonoStatus = OfonoIdle;
+        return;
+    }
     auto call = m_voiceCallManager->call("HangupAll");
     call->onFinished([this] {
         log_debug("Ofono ended call");
