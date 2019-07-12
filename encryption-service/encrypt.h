@@ -3,9 +3,12 @@
 #ifndef __ENCRYPT_H
 #define __ENCRYPT_H
 
+#include "erase.h"
+
 typedef enum _encryption_state {
     ENCRYPTION_NOT_STARTED,
     ENCRYPTION_IN_PREPARATION,
+    ENCRYPTION_ERASURE_IN_PROGRESS,
     ENCRYPTION_IN_PROGRESS,
     ENCRYPTION_NEEDS_RESCAN,
     ENCRYPTION_RESCAN_FINISHED,
@@ -16,7 +19,10 @@ typedef enum _encryption_state {
 typedef void (*encryption_status_changed)(encryption_state);
 
 void init_encryption_service(encryption_status_changed);
-gboolean start_to_encrypt(gchar *passphrase, gboolean passphrase_is_temporary);
+gboolean start_to_encrypt(
+        gchar *passphrase,
+        gboolean passphrase_is_temporary,
+        erase_t erase);
 encryption_state get_encryption_status(void);
 
 #endif // __ENCRYPT_H

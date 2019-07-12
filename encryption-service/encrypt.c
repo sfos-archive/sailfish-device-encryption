@@ -8,12 +8,17 @@
 #include <fcntl.h>
 #include <glib.h>
 #include <glib/gstdio.h>
+#include <openssl/evp.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <udisks/udisks.h>
+#include <unistd.h>
 #include "encrypt.h"
+
+#define BLOCK_SIZE 4096
+#define KEY_SIZE 16
 
 // TODO: Make this more dynamic
 #ifndef DEVICE_TO_ENCRYPT
@@ -92,6 +97,7 @@ typedef struct {
     UDisksBlock *block;
     gchar *passphrase;
     gboolean passphrase_is_temporary;
+    erase_t erase;
     gchar *crypto_device_path;
     gchar *cleartext_device_uuid;
     gulong signal_handler;
@@ -357,6 +363,9 @@ static inline void start_format_luks(invocation_data *data)
             &builder, "{sv}", "dry-run-first", g_variant_new_boolean(TRUE));
     g_variant_builder_add(
             &builder, "{sv}", "tear-down", g_variant_new_boolean(TRUE));
+    if (data->erase == ERASE_WITH_ZEROS)
+        g_variant_builder_add(
+                &builder, "{sv}", "erase", g_variant_new_string("zero"));
 
     g_variant_builder_init(&subbuilder, G_VARIANT_TYPE("a(sa{sv})"));
     g_variant_builder_open(&subbuilder, G_VARIANT_TYPE("(sa{sv})"));
@@ -406,6 +415,120 @@ static inline void start_format_luks(invocation_data *data)
             NULL, format_complete, data);
 }
 
+static gboolean erase_data(gpointer user_data)
+{
+    static EVP_CIPHER_CTX ctx;
+    static long long count = 0;
+    invocation_data *data = user_data;
+    static unsigned char inbuf[BLOCK_SIZE];
+    static gboolean initialized = FALSE;
+    static unsigned char key[KEY_SIZE+1], iv[] = "1234567890123456";
+    static unsigned char outbuf[BLOCK_SIZE];
+    size_t len;
+    int outlen = 0, i;
+    static FILE *stream;
+
+    if (!initialized) {
+        /*
+         * Use AES cipher with random key and zero data as random data
+         * source. This should faster than reading /dev/urandom
+         * continuosly and perfectly fine from security point of view.
+         *
+         * When OpenSSL is updated to 1.1 some interfaces have changed
+         * and need changes here as well. Also new ciphers are
+         * introduced and AES could be replaced with chacha that should
+         * be faster on devices without AES instructions.
+         */
+        stream = fopen("/dev/urandom", "rb");
+        if (fread(key, 1, KEY_SIZE, stream) < KEY_SIZE) {
+            fprintf(stderr, "Warning: %s\n",
+                    "Could not get random key. Skipping device erasure!");
+            return FALSE;
+        }
+        key[KEY_SIZE] = '\0';
+        fclose(stream);
+
+        EVP_CIPHER_CTX_init(&ctx);
+        EVP_EncryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, key, iv);
+
+        for (i = 0; i < sizeof(inbuf); i++)
+            inbuf[i] = 0;
+
+        stream = fopen(STR(DEVICE_TO_ENCRYPT), "wb");
+
+        initialized = TRUE;
+    }
+
+    if (!EVP_CipherUpdate(&ctx, outbuf, &outlen, inbuf, sizeof(inbuf))) {
+        fprintf(stderr, "Warning: %s\n",
+                "Error with cipher. Device erasure incomplete.");
+
+    } else if ((len = fwrite(outbuf, 1, outlen, stream)) < outlen) {
+        if (len > 0)
+            count += len;
+
+        if (errno == ENOSPC) {  // Finished successfully
+            // Left out EVP_EncryptFinal_ex since those
+            // last few bytes are not needed here
+            EVP_CIPHER_CTX_cleanup(&ctx);
+            printf("Wrote %lld bytes to erased block device.\n", count);
+
+        } else {
+            fprintf(stderr,
+                    "Warning: Writing failed after %lld bytes: %s. %s\n",
+                    count, strerror(errno), "Device erasure incomplete.");
+        }
+    } else {  // Wrote the whole block, not done yet
+        count += len;
+        return TRUE;  // Not finished, continue looping
+    }
+
+    // Got here, erasure finished or incomplete. Continue to next task.
+    start_format_luks(data);
+    return FALSE;  // End looping
+}
+
+static inline void tear_down_complete(
+        GObject *block,
+        GAsyncResult *res,
+        gpointer user_data)
+{
+    invocation_data *data = user_data;
+    GError *error = NULL;
+
+    if (udisks_block_call_format_finish((UDisksBlock *)block, res, &error)) {
+        printf("Removed /home from fstab. Starting to erase.\n");
+        g_idle_add(erase_data, data);
+
+    } else {
+        fprintf(stderr, "%s. Aborting.\n", error->message);
+        end_encryption_to_failure(data);
+        g_error_free(error);
+        data = NULL;  // Data was freed in end_encryption_to_failure
+    }
+}
+
+static void start_erasure_with_random(invocation_data *data)
+{
+    GVariantBuilder builder;
+    GVariant *options;
+
+    set_status(ENCRYPTION_ERASURE_IN_PROGRESS);
+
+    // Tear down all configuration and wipe file system signature
+    g_variant_builder_init(&builder, G_VARIANT_TYPE("a{sv}"));
+    g_variant_builder_add(
+            &builder, "{sv}", "no-block", g_variant_new_boolean(TRUE));
+    g_variant_builder_add(
+            &builder, "{sv}", "dry-run-first", g_variant_new_boolean(TRUE));
+    g_variant_builder_add(
+            &builder, "{sv}", "tear-down", g_variant_new_boolean(TRUE));
+    options = g_variant_builder_end(&builder);
+
+    udisks_block_call_format(
+            data->block, "empty", options, NULL, tear_down_complete, data);
+}
+
 static void can_format_to_type(
         GObject *manager,
         GAsyncResult *res,
@@ -435,7 +558,11 @@ static void can_format_to_type(
     }
 
     printf("Starting encryption. All data will be destroyed.\n");
-    start_format_luks(data);
+    if (data->erase == ERASE_WITH_RANDOM) {
+        start_erasure_with_random(data);
+    } else {
+        start_format_luks(data);
+    }
 }
 
 static void found_block_device(
@@ -569,7 +696,10 @@ static void got_bus(GObject *proxy, GAsyncResult *res, gpointer user_data)
     udisks_client_new(NULL, got_client, data);
 }
 
-gboolean start_to_encrypt(gchar *passphrase, gboolean passphrase_is_temporary)
+gboolean start_to_encrypt(
+        gchar *passphrase,
+        gboolean passphrase_is_temporary,
+        erase_t erase)
 {
     invocation_data *data;
 
@@ -580,6 +710,7 @@ gboolean start_to_encrypt(gchar *passphrase, gboolean passphrase_is_temporary)
     data = g_new0(invocation_data, 1);
     data->passphrase = passphrase;
     data->passphrase_is_temporary = passphrase_is_temporary;
+    data->erase = erase;
     g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, data);
     return TRUE;
 }

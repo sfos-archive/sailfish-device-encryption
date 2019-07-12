@@ -3,13 +3,19 @@
 #ifndef __DBUS_H
 #define __DBUS_H
 
-typedef gboolean (*encrypt_call_handler)(
+#include "erase.h"
+
+typedef gboolean (*encrypt_call_handler)(GError **error);
+typedef gboolean (*prepare_call_handler)(
         gchar *passphrase,
-        gboolean passphrase_is_temporary,
+        erase_t erase,
         GError **error);
 typedef gboolean (*finalize_call_handler)(GError **error);
 
-void init_dbus(encrypt_call_handler, finalize_call_handler);
+void init_dbus(
+        prepare_call_handler prepare_method,
+        encrypt_call_handler encrypt_method,
+        finalize_call_handler finalize_method);
 void signal_encrypt_finished(GError *error);
 
 #endif // __DBUS_H

@@ -16,6 +16,7 @@
 #define ENCRYPTION_IFACE BUS_NAME
 #define ENCRYPTION_PATH "/org/sailfishos/EncryptionService"
 #define ENCRYPTION_FAILED_ERROR BUS_NAME ".Failed"
+#define PREPARE_TO_ENCRYPT_METHOD "PrepareToEncrypt"
 #define ENCRYPTION_METHOD "BeginEncryption"
 #define ENCRYPTION_FINISHED_SIGNAL "EncryptionFinished"
 #define FINALIZATION_METHOD "FinalizeEncryption"
@@ -25,8 +26,10 @@ static const gchar introspection_xml[] =
     "<node>"
     "<interface name=\"" ENCRYPTION_IFACE "\">"
     "<method name=\"" ENCRYPTION_METHOD "\">"
+    "</method>"
+    "<method name=\"" PREPARE_TO_ENCRYPT_METHOD "\">"
     "<arg name=\"passphrase\" direction=\"in\" type=\"s\"></arg>"
-    "<arg name=\"temporaryPassphrase\" direction=\"in\" type=\"b\"></arg>"
+    "<arg name=\"overwriteType\" direction=\"in\" type=\"s\"></arg>"
     "</method>"
     "<method name=\"" FINALIZATION_METHOD "\">"
     "</method>"
@@ -43,6 +46,7 @@ static struct {
     GDBusNodeInfo *info;
     guint encrypt_iface_id;
     GDBusInterfaceVTable *encrypt_iface_vtable;
+    prepare_call_handler prepare_method;
     encrypt_call_handler encrypt_method;
     finalize_call_handler finalize_method;
     DAPolicy *policy;
@@ -105,8 +109,8 @@ void method_call_handler(
 {
     GError *error = NULL;
     GVariantIter iter;
-    gchar *passphrase;
-    gboolean temporary_passphrase = FALSE;
+    gchar *passphrase, *overwrite_type;
+    erase_t erase;
 
     if (!is_allowed(connection, sender)) {
         g_dbus_method_invocation_return_dbus_error(
@@ -118,13 +122,36 @@ void method_call_handler(
     // this implements only one interface on only one path
     // and GDBus checks for them and also that parameters exist
     // and are of correct type.
-    if (strcmp(method_name, ENCRYPTION_METHOD) == 0) {
+    if (strcmp(method_name, PREPARE_TO_ENCRYPT_METHOD) == 0) {
         g_variant_iter_init(&iter, parameters);
         g_variant_iter_next(&iter, "s", &passphrase);
-        g_variant_iter_next(&iter, "b", &temporary_passphrase);
+        g_variant_iter_next(&iter, "s", &overwrite_type);
 
-        // Encrypt method takes the ownership of passphrase now
-        if (data.encrypt_method(passphrase, temporary_passphrase, &error)) {
+        if (strcmp(overwrite_type, "none") == 0) {
+            erase = DONT_ERASE;
+        } else if (strcmp(overwrite_type, "zero") == 0) {
+            erase = ERASE_WITH_ZEROS;
+        } else if (strcmp(overwrite_type, "random") == 0) {
+            erase = ERASE_WITH_RANDOM;
+        } else {
+            g_dbus_method_invocation_return_dbus_error(
+                    invocation, ENCRYPTION_FAILED_ERROR,
+                    "Invalid argument to overwriteType");
+            g_free(passphrase);
+            g_free(overwrite_type);
+            return;
+        }
+        g_free(overwrite_type);
+
+        // Prepare method takes the ownership of passphrase now
+        if (data.prepare_method(passphrase, erase, &error)) {
+            g_dbus_method_invocation_return_value(invocation, NULL);
+        } else {
+            g_dbus_method_invocation_return_gerror(invocation, error);
+            g_error_free(error);
+        }
+    } else if (strcmp(method_name, ENCRYPTION_METHOD) == 0) {
+        if (data.encrypt_method(&error)) {
             g_dbus_method_invocation_return_value(invocation, NULL);
             data.receiver = g_strdup(sender);
         } else {
@@ -146,9 +173,11 @@ void method_call_handler(
 }
 
 void init_dbus(
+        prepare_call_handler prepare_method,
         encrypt_call_handler encrypt_method,
         finalize_call_handler finalize_method)
 {
+    data.prepare_method = prepare_method;
     data.encrypt_method = encrypt_method;
     data.finalize_method = finalize_method;
 
