@@ -25,8 +25,7 @@ static const MinUi::Color color_white(255, 255, 255, 255);
 
 PinUi::~PinUi()
 {
-    eventLoop()->cancelTimer(m_timer);
-    m_timer = 0;
+    cancelTimer();
 
     stopInactivityShutdownTimer();
     cancelBatteryEmptyShutdown();
@@ -167,8 +166,8 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
         if (code == ACCEPT_CODE) {
             if (emergencyMode()) {
                 if (m_call.calling()) {
-                        // End the ongoing call
-                        m_call.endCall();
+                    // End the ongoing call
+                    m_call.endCall();
                 } else {
                     // Make the call
                     std::string number = m_password->text();
@@ -191,17 +190,10 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
                 m_call.endCall();
             } else {
                 // Cancel pressed, get out of the emergency call mode
-                if (m_timer) {
-                    window()->eventLoop()->cancelTimer(m_timer);
-                    m_timer = 0;
-                }
                 setEmergencyMode(false);
             }
         } else if (character) {
-            if (m_timer) {
-                window()->eventLoop()->cancelTimer(m_timer);
-                m_timer = 0;
-            }
+            cancelTimer();
             if (m_warningLabel) {
                 reset();
             }
@@ -230,6 +222,7 @@ void PinUi::setEmergencyMode(bool emergency)
 void PinUi::emergencyModeChanged()
 {
     /* Handle UI changes */
+    cancelTimer();
     m_password->setText("");
     if (emergencyMode()) {
         m_emergencyBackground->setVisible(true);
@@ -274,6 +267,7 @@ void PinUi::emergencyModeChanged()
             m_speakerButton->setVisible(true);
         }
     } else {
+        m_call.endCall(); // Just in case
         m_emergencyBackground->setVisible(false);
         m_emergencyLabel->setVisible(false);
         m_label->setVisible(true);
@@ -652,7 +646,6 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
             m_warningLabel = createLabel(m_emergency_call_ended, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
             m_key->setAcceptText(m_start_call);
             createTimer(EMERGENCY_MODE_TIMEOUT, [this]() {
-                cancelTimer();
                 setEmergencyMode(false);
             });
             // Fall through to reset speaker status
