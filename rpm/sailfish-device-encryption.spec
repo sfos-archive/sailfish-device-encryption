@@ -38,7 +38,6 @@ Requires:      %{name}-service
 %package unlock-ui
 Summary:  Sailfish Encryption Unlock UI
 Requires: sailfish-minui-resources
-Requires: sailfish-content-graphics-default-base
 
 %description unlock-ui
 Password agent to unlock encrypted partitions on device boot.
