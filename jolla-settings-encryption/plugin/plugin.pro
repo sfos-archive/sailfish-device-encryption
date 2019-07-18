@@ -10,7 +10,7 @@ TRANSLATIONS_PATH = /usr/share/translations
 SOURCES += $$PWD/plugin.cpp
 HEADERS += $$PWD/encryptionstatus.h
 
-import.files = qmldir
+import.files = qmldir EncryptionService.qml
 import.path = $$TARGETPATH
 target.path = $$TARGETPATH
 

@@ -33,14 +33,10 @@ Dialog {
 
     Component.onCompleted: encryptionSettings.authorization.requestChallenge()
 
-    onAccepted: {
-        acceptDestinationInstance.authenticate()
-    }
+    onAccepted: acceptDestinationInstance.authenticate()
 
     BatteryStatus {
         id: battery
-
-        onChargerStatusChanged: console.log("=================== status:", battery.status, "charge:", battery.chargerStatus, "charge:", battery.chargePercentage)
     }
 
     SecurityCodeSettings {
