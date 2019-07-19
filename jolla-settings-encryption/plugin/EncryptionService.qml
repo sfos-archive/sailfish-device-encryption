@@ -60,6 +60,10 @@ DBusInterface {
         call("FinalizeEncryption")
     }
 
+    function prepare(passphrase, overwriteType) {
+        call("PrepareToEncrypt", [passphrase, overwriteType])
+    }
+
     function encryptionFinished(success, error) {
         status = success ? EncryptionStatus.Encrypted : EncryptionStatus.Error
     }

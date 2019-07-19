@@ -33,6 +33,12 @@ Page {
     EncryptionSettings {
         id: encryptionSettings
 
+        onEncryptingHome: lipstick.startEncryptionPreparation()
+        onEncryptHomeError: console.warn("Home encryption failed. Maybe token expired.")
+    }
+
+    EncryptionService {
+        id: encryptionService
     }
 
     DBusInterface {
@@ -69,7 +75,7 @@ Page {
         property string securityCode
 
         interval: 3000
-        onTriggered: {}
+        onTriggered: encryptionService.prepare(securityCode, "random")
     }
 
     SilicaFlickable {
@@ -174,7 +180,7 @@ Page {
                             p.acceptDestinationInstance.authenticated.connect(function(authenticationToken) {
                                 // Enters to "reboot" mode but does not execute actual reboot.
                                 prepareEncryption.securityCode = mandatoryDeviceLock.securityCode
-                                lipstick.startEncryptionPreparation()
+                                encryptionSettings.encryptHome(authenticationToken)
                             })
                             p.acceptDestinationInstance.canceled.connect(function() {
                                 pageStack.pop(page)
