@@ -36,5 +36,8 @@ else
     fi
 fi
 
+# Remove SUW marker files to enter it with pre-user-session mode
+rm -f /tmp/home/nemo/.jolla-startupwizard*
+
 usermod --home /tmp/home/nemo nemo
 systemctl stop home.mount || true

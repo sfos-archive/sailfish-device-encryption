@@ -16,9 +16,9 @@ DBusInterface {
 
     property string errorString
     property string errorMessage
-    property int status
+    property int encryptionStatus
     property bool available
-    readonly property bool busy: status == EncryptionStatus.Busy
+    readonly property bool busy: encryptionStatus == EncryptionStatus.Busy
 
     // DBusInterface is a QObject so no child items
     property FileWatcher encryptHome: FileWatcher {
@@ -38,7 +38,7 @@ DBusInterface {
             // user do not see text change from Idle to Busy (encryption is started
             // when we hit the PleaseWaitPage).
             if (encryptionService.available) {
-                encryptionService.status = EncryptionStatus.Busy
+                encryptionService.encryptionStatus = EncryptionStatus.Busy
             }
         })
     }
@@ -46,12 +46,12 @@ DBusInterface {
     function encrypt() {
         call("BeginEncryption", undefined,
              function() {
-                 status = EncryptionStatus.Busy
+                 encryptionStatus = EncryptionStatus.Busy
              },
              function(error, message) {
                  errorString = error
                  errorMessage = message
-                 status = EncryptionStatus.Error
+                 encryptionStatus = EncryptionStatus.Error
              }
         )
     }
@@ -65,6 +65,6 @@ DBusInterface {
     }
 
     function encryptionFinished(success, error) {
-        status = success ? EncryptionStatus.Encrypted : EncryptionStatus.Error
+        encryptionStatus = success ? EncryptionStatus.Encrypted : EncryptionStatus.Error
     }
 }

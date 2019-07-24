@@ -31,6 +31,9 @@ static gboolean call_prepare(gchar *passphrase, erase_t erase, GError **error)
     if (get_encryption_status() == ENCRYPTION_NOT_STARTED) {
         saved_passphrase = passphrase;
         erase_type = erase;
+
+        prepare(main_loop);
+
         return TRUE;
     } else {
         g_free(passphrase);

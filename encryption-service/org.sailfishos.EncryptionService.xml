@@ -3,11 +3,13 @@
     "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd" >
 <node xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
   <interface name="org.sailfishos.EncryptionService">
-    <method name="BeginEncryption">
+    <method name="PrepareToEncrypt">
         <arg name="passphrase" direction="in" type="s"></arg>
+        <arg name="overwriteType" direction="in" type="s"></arg>
+    </method>
+    <method name="BeginEncryption">
     </method>
     <method name="FinalizeEncryption">
-        <arg name="temporaryEncryptionKey" direction="in" type="b"></arg>
     </method>
     <signal name="EncryptionFinished">
         <arg name="success" type="b" />

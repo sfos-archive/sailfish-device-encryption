@@ -75,7 +75,7 @@ Page {
         property string securityCode
 
         interval: 3000
-        onTriggered: encryptionService.prepare(securityCode, "random")
+        onTriggered: encryptionService.prepare(securityCode, "zero")
     }
 
     SilicaFlickable {

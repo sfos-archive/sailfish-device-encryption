@@ -4,5 +4,6 @@
 #define __MANAGE_H
 
 void finalize(GMainLoop *main_loop);
+void prepare(GMainLoop *main_loop);
 
 #endif // __MANAGE_H

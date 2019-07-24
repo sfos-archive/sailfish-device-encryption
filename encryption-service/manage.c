@@ -30,7 +30,10 @@ typedef struct {
     gulong signal_handler;
     GList *job_watches;
     guint task;
+    gboolean preparing;
 } manage_data;
+
+static manage_data *private_data = NULL;
 
 static inline void manage_data_free(manage_data *data)
 {
@@ -105,6 +108,7 @@ enum unit_action {
     START_UNIT,
     RELOAD_UNITS,
     ENABLE_UNIT,
+    CREATE_MARKER,
 };
 
 typedef struct {
@@ -121,6 +125,14 @@ unit_task unit_tasks[] = {
     { END_OF_UNIT_TASKS }
 };
 
+unit_task preparation_tasks[] = {
+    { RELOAD_UNITS, NULL },
+    { CREATE_MARKER, "/var/lib/sailfish-device-encryption/encrypt-home" },
+    { START_UNIT, "home-encryption-preparation.service" },
+    { START_UNIT, "default.target" },
+    { END_OF_UNIT_TASKS }
+};
+
 static gchar * get_unit_action(enum unit_action action)
 {
     switch (action) {
@@ -133,6 +145,7 @@ static gchar * get_unit_action(enum unit_action action)
         case ENABLE_UNIT:
             return "EnableUnitFiles";
         case END_OF_UNIT_TASKS:
+        case CREATE_MARKER:
             break;
     }
     return "";
@@ -181,7 +194,10 @@ static void unit_changing_state(
 static void handle_next_unit_task(manage_data *data)
 {
     GVariantBuilder builder;
-    unit_task task = unit_tasks[data->task];
+    unit_task task;
+
+    if (data->preparing) task = preparation_tasks[data->task];
+    else task = unit_tasks[data->task];
 
     switch (task.action) {
         case START_UNIT:
@@ -210,9 +226,29 @@ static void handle_next_unit_task(manage_data *data)
         case END_OF_UNIT_TASKS:
             g_signal_handler_disconnect(
                     data->systemd_manager, data->signal_handler);
-            g_main_loop_quit(data->main_loop);
-            manage_data_free(data);
+            if (data->preparing) {
+                // Stay waiting for BeginEncryption
+                printf("Preparation done.\n");
+                data->preparing = FALSE;
+                data->task = 0;
+            } else {
+                g_main_loop_quit(data->main_loop);
+                manage_data_free(data);
+            }
             return;
+            break;
+        case CREATE_MARKER:
+            printf("Creating marker %s\n", task.unit);
+            FILE *f=fopen(task.unit, "w");
+            if (!f) {
+                fprintf(stderr, "Failed to create marker file %s\n", task.unit);
+            }
+            fclose(f);
+            // To the next one
+            data->task++;
+            handle_next_unit_task(data);
+            return;
+            break;
     }
 
     data->task++;
@@ -351,10 +387,24 @@ static void got_bus(GObject *proxy, GAsyncResult *res, gpointer user_data)
 
 void finalize(GMainLoop *main_loop)
 {
-    manage_data *data = g_new0(manage_data, 1);
-    data->main_loop = main_loop;
     printf("Restarting user session with encrypted home.\n");
-    g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, data);
+    if (!private_data) {
+        private_data = g_new0(manage_data, 1);
+        private_data->main_loop = main_loop;
+        g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, private_data);
+    } else {
+        // Already prepared, skip initialisation
+        terminate_user(private_data);
+    }
+}
+
+void prepare(GMainLoop *main_loop)
+{
+    private_data = g_new0(manage_data, 1);
+    private_data->main_loop = main_loop;
+    private_data->preparing = TRUE;
+    printf("Preparing encrypted home.\n");
+    g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, private_data);
 }
 
 // vim: expandtab:ts=4:sw=4
