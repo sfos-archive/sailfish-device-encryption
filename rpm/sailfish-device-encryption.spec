@@ -1,6 +1,6 @@
 Name:       sailfish-device-encryption
 Summary:    Sailfish Device Encryption
-Version:    0.7.2
+Version:    0.7.3
 Release:    1
 License:    Proprietary
 URL:        https://bitbucket.org/jolla/ui-sailfish-device-encryption
@@ -140,7 +140,11 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %ghost %config(noreplace) %{unit_conf_dir}/actdead.target.wants/jolla-actdead-charging.service
 
 %post service
-if [ $1 == 2 ] ; then
+# Add marker file if we are on Imager and remove otherwise
+if [ -f "/.bootstrap" ]; then
+  mkdir -p %{_sharedstatedir}/sailfish-device-encryption || :
+  touch %{_sharedstatedir}/sailfish-device-encryption/encrypt-home || :
+else
   rm -f %{_sharedstatedir}/sailfish-device-encryption/encrypt-home || :
 fi
 
