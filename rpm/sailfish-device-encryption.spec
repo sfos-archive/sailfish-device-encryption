@@ -139,7 +139,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %ghost %config(noreplace) %{unit_conf_dir}/home-mount-settle.service.d/50-sailfish-home.conf
 %ghost %config(noreplace) %{unit_conf_dir}/actdead.target.wants/jolla-actdead-charging.service
 
-%post service
+%pre service
 # Add marker file if we are on Imager and remove otherwise
 if [ -f "/.bootstrap" ]; then
   mkdir -p %{_sharedstatedir}/sailfish-device-encryption || :
