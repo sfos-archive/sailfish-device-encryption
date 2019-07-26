@@ -16,6 +16,8 @@ Page {
     // To be checked
     readonly property bool applicationActive: Qt.application.active
 
+    property EncryptionService encryptionService
+
     function createBackupLink() {
         //: A link to Settings | System | Backup
         //: Action or verb that can be used for %1 in settings_encryption-la-encrypt_user_data_warning and
@@ -37,8 +39,9 @@ Page {
         onEncryptHomeError: console.warn("Home encryption failed. Maybe token expired.")
     }
 
-    EncryptionService {
-        id: encryptionService
+    Component {
+        id: encryptionServiceComponent
+        EncryptionService {}
     }
 
     DBusInterface {
@@ -75,7 +78,10 @@ Page {
         property string securityCode
 
         interval: 3000
-        onTriggered: encryptionService.prepare(securityCode, "zero")
+        onTriggered: {
+            page.encryptionService = encryptionServiceComponent.createObject(root)
+            page.encryptionService.prepare(securityCode, "zero")
+        }
     }
 
     SilicaFlickable {
