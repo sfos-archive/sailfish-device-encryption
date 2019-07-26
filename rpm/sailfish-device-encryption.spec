@@ -146,6 +146,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{unitdir}/home-encryption-preparation.service
 %{unitdir}/local-fs.target.wants/home-encryption-preparation.service
 %{unitdir}/mount-sd@.service.d/50-after-preparation.conf
+%{unitdir}/packagekit.service.d/01-home-mount.conf
 %{unitdir}/home-mount-settle.service
 %{_datadir}/%{name}
 %dir %{_sharedstatedir}/%{name}
