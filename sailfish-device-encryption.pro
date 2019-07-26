@@ -2,6 +2,7 @@ TEMPLATE = subdirs
 SUBDIRS += \
     encryption-service \
     libsailfishdeviceencryption \
+    jolla-settings-encryption \
     sailfish-unlock-ui
 
 OTHER_FILES += \

@@ -31,6 +31,7 @@ BuildRequires: pkgconfig(openssl)
 BuildRequires: pkgconfig(udisks2)
 Requires:      %{name}-unlock-ui
 Requires:      %{name}-service
+Requires:      %{name}-settings
 
 %description
 %{summary}.
@@ -55,6 +56,16 @@ Requires: oneshot
 %description service
 Encrypts home partition on request.
 
+%package settings
+Summary:  Settings plugin for encryption
+Requires: jolla-settings
+Requires: jolla-settings-system
+Requires: %{name}-service = %{version}-%{release}
+Requires: %{name}-unlock-ui = %{version}-%{release}
+
+%description settings
+%{summary}.
+
 %package devel
 Summary:  Development files for Sailfish Device Encryption
 BuildRequires:  pkgconfig(Qt5Core)
@@ -67,6 +78,11 @@ BuildRequires:  pkgconfig(Qt5Core)
 
 %build
 pushd sailfish-unlock-ui
+%qmake5 "VERSION=%{version}"
+make %{?_smp_mflags}
+popd
+
+pushd jolla-settings-encryption
 %qmake5 "VERSION=%{version}"
 make %{?_smp_mflags}
 popd
@@ -84,6 +100,10 @@ popd
 rm -rf %{buildroot}
 
 pushd sailfish-unlock-ui
+%qmake5_install
+popd
+
+pushd jolla-settings-encryption
 %qmake5_install
 popd
 
@@ -126,6 +146,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{unitdir}/home-encryption-preparation.service
 %{unitdir}/local-fs.target.wants/home-encryption-preparation.service
 %{unitdir}/mount-sd@.service.d/50-after-preparation.conf
+%{unitdir}/packagekit.service.d/01-home-mount.conf
 %{unitdir}/home-mount-settle.service
 %{_datadir}/%{name}
 %dir %{_sharedstatedir}/%{name}
@@ -148,6 +169,12 @@ else
   rm -f %{_sharedstatedir}/sailfish-device-encryption/encrypt-home || :
 fi
 
+%files settings
+%defattr(-,root,root,-)
+%{_datadir}/jolla-settings
+%{_libdir}/qt5/qml/Sailfish/Encryption
+%{_datadir}/translations/settings-*.qm
+
 %files devel
 %defattr(-,root,root,-)
 %{_libdir}/libsailfishdeviceencryption.a
@@ -162,7 +189,7 @@ Summary:  Translation source for Sailfish Encryption Unlock UI
 
 %files ts-devel
 %defattr(-,root,root,-)
-%{_datadir}/translations/source/sailfish-unlock-ui.ts
+%{_datadir}/translations/source/*.ts
 
 %package unlock-ui-resources-z1.0
 Summary:    Scale factor 1.0 resources for the Sailfish Encryption Unlock UI

@@ -557,6 +557,24 @@ static void can_format_to_type(
         return;
     }
 
+    // Unmount if mounted, otherwise encryption fails
+    UDisksFilesystem *udfs = udisks_filesystem_proxy_new_sync(data->connection, G_DBUS_PROXY_FLAGS_NONE, UDISKS_INTERFACE, data->crypto_device_path, NULL, &error);
+    if (!udfs) {
+        fprintf(stderr, "%s. Aborting.\n", error->message);
+        end_encryption_to_failure(data);
+        g_error_free(error);
+    } else {
+        if (udisks_filesystem_get_mount_points(udfs)) {
+            if (!udisks_filesystem_call_unmount_sync(udfs, g_variant_new("a{sv}", NULL), NULL, &error)) {
+                fprintf(stderr, "%s. Aborting.\n", error->message);
+                end_encryption_to_failure(data);
+                g_error_free(error);
+            } else {
+                printf("Unmounted %s\n", data->crypto_device_path);
+            }
+        }
+    }
+
     printf("Starting encryption. All data will be destroyed.\n");
     if (data->erase == ERASE_WITH_RANDOM) {
         start_erasure_with_random(data);
