@@ -29,6 +29,9 @@ BuildRequires: pkgconfig(mce)
 BuildRequires: pkgconfig(ohm-ext-route)
 BuildRequires: pkgconfig(openssl)
 BuildRequires: pkgconfig(udisks2)
+BuildRequires: pkgconfig(Qt5Qml)
+BuildRequires: pkgconfig(Qt5Quick)
+BuildRequires: pkgconfig(Qt5Gui)
 Requires:      %{name}-unlock-ui
 Requires:      %{name}-service
 Requires:      %{name}-settings
