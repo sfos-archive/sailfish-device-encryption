@@ -60,12 +60,6 @@ const char *device_conf_name = "50-sailfish-home.conf";
 const char *device_conf_template = "[Unit]\n" \
     "After=dev-disk-by\\x2duuid-%s.device\n";
 
-// TODO: This probably needs a "supervisor" that
-//       watches for interface changes etc. on udisks
-//       and starts new phases based on that. It's
-//       probably a requirement for unmounting and
-//       locking devices properly before encryption.
-
 /*
  * This could be done with GObject signals but I think
  * this is simpler for now. These may be turned into
