@@ -539,6 +539,7 @@ static void can_format_to_type(
     gchar *bin;
     invocation_data *data = user_data;
     GError *error = NULL;
+    const gchar *const *mount_points;
 
     if (!udisks_manager_call_can_format_finish(
                 (UDisksManager *)manager, &avail, res, &error)) {
@@ -564,11 +565,14 @@ static void can_format_to_type(
         end_encryption_to_failure(data);
         g_error_free(error);
     } else {
-        if (udisks_filesystem_get_mount_points(udfs)) {
+        mount_points = udisks_filesystem_get_mount_points(udfs);
+        // If the array is not empty, there is a mount point
+        if (mount_points != NULL && *mount_points != NULL) {
             if (!udisks_filesystem_call_unmount_sync(udfs, g_variant_new("a{sv}", NULL), NULL, &error)) {
                 fprintf(stderr, "%s. Aborting.\n", error->message);
                 end_encryption_to_failure(data);
                 g_error_free(error);
+                return;
             } else {
                 printf("Unmounted %s\n", data->crypto_device_path);
             }
