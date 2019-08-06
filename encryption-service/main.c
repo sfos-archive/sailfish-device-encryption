@@ -22,9 +22,9 @@ GQuark encryption_error_busy(void)
     return g_quark_from_static_string("g-encryption-error-busy-quark");
 }
 
-GMainLoop *main_loop;
-gchar *saved_passphrase = NULL;
-erase_t erase_type;
+static GMainLoop *main_loop;
+static gchar *saved_passphrase = NULL;
+static erase_t erase_type = DONT_ERASE;
 
 static gboolean call_prepare(gchar *passphrase, erase_t erase, GError **error)
 {
@@ -106,6 +106,7 @@ static void status_changed_handler(encryption_state status)
 
 int main(int argc, char **argv)
 {
+    setlinebuf(stdout);
     main_loop = g_main_loop_new(NULL, FALSE);
 
     init_encryption_service(status_changed_handler);
