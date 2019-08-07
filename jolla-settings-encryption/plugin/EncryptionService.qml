@@ -7,18 +7,20 @@ import Sailfish.Encryption 1.0
 DBusInterface {
     id: encryptionService
 
-    // This introspects the interface. Thus, starting the dbus service.
     bus: DBus.SystemBus
     service: "org.sailfishos.EncryptionService"
     path: "/org/sailfishos/EncryptionService"
     iface: "org.sailfishos.EncryptionService"
     signalsEnabled: true
+    // Prevents automatic introspection but simplifies the code otherwise
+    watchServiceStatus: true
 
     property string errorString
     property string errorMessage
     property int encryptionStatus
-    property bool available
-    readonly property bool busy: encryptionStatus == EncryptionStatus.Busy
+    readonly property bool encryptionWanted: encryptHome.exists && status !== DBusInterface.Unavailable
+    readonly property bool available: encryptHome.exists && status === DBusInterface.Available
+    readonly property bool busy: encryptionWanted && encryptionStatus == EncryptionStatus.Busy
 
     // DBusInterface is a QObject so no child items
     property FileWatcher encryptHome: FileWatcher {
@@ -26,21 +28,22 @@ DBusInterface {
         fileName: "/var/lib/sailfish-device-encryption/encrypt-home"
     }
 
-    readonly property DBusInterface nameOwner: DBusInterface {
+    // This introspects the interface. Thus, starting the dbus service.
+    readonly property DBusInterface introspectAtStart: DBusInterface {
         bus: DBus.SystemBus
-        service: 'org.freedesktop.DBus'
-        path: '/org/freedesktop/DBus'
-        iface: 'org.freedesktop.DBus'
-        Component.onCompleted: call("NameHasOwner", "org.sailfishos.EncryptionService", function (hasOwner) {
-            encryptionService.available = hasOwner && encryptHome.exists
+        service: encryptionService.service
+        path: encryptionService.path
+        iface: "org.freedesktop.DBus.Introspectable"
+        Component.onCompleted: call("Introspect")
+    }
 
-            // Move to busy state right after name has owner changed. So that
-            // user do not see text change from Idle to Busy (encryption is started
-            // when we hit the PleaseWaitPage).
-            if (encryptionService.available) {
-                encryptionService.encryptionStatus = EncryptionStatus.Busy
-            }
-        })
+    onAvailableChanged: {
+        // Move to busy state right after service is available. So that
+        // user do not see text change from Idle to Busy (encryption is started
+        // when we hit the PleaseWaitPage).
+        if (available) {
+            encryptionStatus = EncryptionStatus.Busy
+        }
     }
 
     function encrypt() {
