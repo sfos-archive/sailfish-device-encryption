@@ -222,9 +222,6 @@ void signal_encrypt_finished(GError *error)
 
     g_free(data.receiver);
     data.receiver = NULL;
-
-    if (error != NULL)
-        g_error_free(error);
 }
 
 static gboolean is_allowed(GDBusConnection *connection, const gchar *sender)
