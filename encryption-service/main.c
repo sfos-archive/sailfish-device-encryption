@@ -7,24 +7,20 @@
 #include "encrypt.h"
 #include "manage.h"
 
-#define ENCRYPTION_ERROR_FAILED encryption_error_failed()
-#define ENCRYPTION_ERROR_BUSY encryption_error_busy()
 #define TEMPORARY_PASSPHRASE "00000"
 #define QUIT_TIMEOUT 60
 
-GQuark encryption_error_failed(void)
-{
-    return g_quark_from_static_string("g-encryption-error-failed-quark");
-}
+G_DEFINE_QUARK(encryption-error-quark, encryption_error)
+#define ENCRYPTION_ERROR (encryption_error_quark())
 
-GQuark encryption_error_busy(void)
-{
-    return g_quark_from_static_string("g-encryption-error-busy-quark");
-}
+typedef enum {
+  ENCRYPTION_ERROR_FAILED,
+  ENCRYPTION_ERROR_BUSY
+} EncryptionError;
 
-GMainLoop *main_loop;
-gchar *saved_passphrase = NULL;
-erase_t erase_type;
+static GMainLoop *main_loop;
+static gchar *saved_passphrase = NULL;
+static erase_t erase_type = DONT_ERASE;
 
 static gboolean call_prepare(gchar *passphrase, erase_t erase, GError **error)
 {
@@ -38,7 +34,7 @@ static gboolean call_prepare(gchar *passphrase, erase_t erase, GError **error)
     } else {
         g_free(passphrase);
         g_set_error_literal(
-                error, ENCRYPTION_ERROR_BUSY, 0,
+                error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
                 "Encryption is already work in progress");
         return FALSE;
     }
@@ -55,7 +51,7 @@ static gboolean call_encrypt(
     }
     if (!start_to_encrypt(passphrase, passphrase_is_temporary, erase_type)) {
         g_set_error_literal(
-                error, ENCRYPTION_ERROR_FAILED, 0,
+                error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
                 "Starting encryption failed");
         return FALSE;
     }
@@ -72,7 +68,7 @@ static gboolean call_finalize(GError **error)
             return TRUE;
         default:
             g_set_error_literal(
-                    error, ENCRYPTION_ERROR_BUSY, 0,
+                    error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_BUSY,
                     "Encryption is in progress");
             return FALSE;
     }
@@ -91,13 +87,14 @@ static void status_changed_handler(encryption_state status)
     switch (status) {
         case ENCRYPTION_FAILED:
             g_set_error_literal(
-                    &error, ENCRYPTION_ERROR_FAILED, 0,
+                    &error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
                     "Encryption failed");
             signal_encrypt_finished(error);
             g_main_loop_quit(main_loop);
+            g_error_free(error);
             break;
         case ENCRYPTION_FINISHED:
-            signal_encrypt_finished(error);
+            signal_encrypt_finished(NULL);
             break;
         default:
             break; // Do nothing
@@ -106,6 +103,7 @@ static void status_changed_handler(encryption_state status)
 
 int main(int argc, char **argv)
 {
+    setlinebuf(stdout);
     main_loop = g_main_loop_new(NULL, FALSE);
 
     init_encryption_service(status_changed_handler);

@@ -60,12 +60,6 @@ const char *device_conf_name = "50-sailfish-home.conf";
 const char *device_conf_template = "[Unit]\n" \
     "After=dev-disk-by\\x2duuid-%s.device\n";
 
-// TODO: This probably needs a "supervisor" that
-//       watches for interface changes etc. on udisks
-//       and starts new phases based on that. It's
-//       probably a requirement for unmounting and
-//       locking devices properly before encryption.
-
 /*
  * This could be done with GObject signals but I think
  * this is simpler for now. These may be turned into
@@ -539,6 +533,8 @@ static void can_format_to_type(
     gchar *bin;
     invocation_data *data = user_data;
     GError *error = NULL;
+    const gchar *const *mount_points;
+    UDisksFilesystem *udfs;
 
     if (!udisks_manager_call_can_format_finish(
                 (UDisksManager *)manager, &avail, res, &error)) {
@@ -558,17 +554,23 @@ static void can_format_to_type(
     }
 
     // Unmount if mounted, otherwise encryption fails
-    UDisksFilesystem *udfs = udisks_filesystem_proxy_new_sync(data->connection, G_DBUS_PROXY_FLAGS_NONE, UDISKS_INTERFACE, data->crypto_device_path, NULL, &error);
+    udfs = udisks_filesystem_proxy_new_sync(
+            data->connection, G_DBUS_PROXY_FLAGS_NONE, UDISKS_INTERFACE,
+            data->crypto_device_path, NULL, &error);
     if (!udfs) {
         fprintf(stderr, "%s. Aborting.\n", error->message);
         end_encryption_to_failure(data);
         g_error_free(error);
     } else {
-        if (udisks_filesystem_get_mount_points(udfs)) {
-            if (!udisks_filesystem_call_unmount_sync(udfs, g_variant_new("a{sv}", NULL), NULL, &error)) {
+        mount_points = udisks_filesystem_get_mount_points(udfs);
+        // If the array is not empty, there is a mount point
+        if (mount_points != NULL && *mount_points != NULL) {
+            if (!udisks_filesystem_call_unmount_sync(
+                        udfs, g_variant_new("a{sv}", NULL), NULL, &error)) {
                 fprintf(stderr, "%s. Aborting.\n", error->message);
                 end_encryption_to_failure(data);
                 g_error_free(error);
+                return;
             } else {
                 printf("Unmounted %s\n", data->crypto_device_path);
             }
