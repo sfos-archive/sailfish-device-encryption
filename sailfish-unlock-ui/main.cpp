@@ -3,6 +3,7 @@
  */
 
 #include "agent.h"
+#include "touchinput.h"
 
 using namespace Sailfish;
 
@@ -19,6 +20,11 @@ int main(int argc, char **argv)
      */
     if (!Agent::checkIfAgentCanRun())
         return EXIT_SUCCESS;
+
+    const int max_wait_seconds = 600;
+
+    if (!touchinput_wait_for_device(max_wait_seconds))
+        return EXIT_FAILURE;
 
     Agent agent;
     /* If argc != 1, enable UI debugging */

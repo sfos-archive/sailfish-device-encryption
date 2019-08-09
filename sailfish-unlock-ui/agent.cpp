@@ -5,7 +5,6 @@
 #include "devicelocksettings.h"
 #include "logging.h"
 #include "pin.h"
-#include "touchinput.h"
 #include <dirent.h>
 #include <glib.h>
 #include <sailfish-minui-dbus/eventloop.h>
@@ -84,11 +83,6 @@ int Agent::execute(bool uiDebugging)
         if (checkForTemporaryPassphrase())
             return EXIT_SUCCESS;
     }
-
-    const int max_wait_seconds = 600;
-
-    if (!touchinput_wait_for_device(max_wait_seconds))
-        return EXIT_FAILURE;
 
     // Now all "before UI" tasks are done and showing UI is allowed
     m_uiAllowed = true;
