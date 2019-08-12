@@ -3,7 +3,7 @@
 #ifndef __MANAGE_H
 #define __MANAGE_H
 
-void finalize(GMainLoop *main_loop);
+void finalize(GMainLoop *main_loop, gboolean restore);
 void prepare(GMainLoop *main_loop);
 
 #endif // __MANAGE_H

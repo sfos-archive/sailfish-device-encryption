@@ -75,7 +75,12 @@ static gboolean call_finalize(GError **error)
     switch (get_encryption_status()) {
         case ENCRYPTION_NOT_STARTED:
         case ENCRYPTION_FINISHED:
-            finalize(main_loop);
+            finalize(main_loop, FALSE);
+            return TRUE;
+        case ENCRYPTION_FAILED:
+            // If preparation was used, use restoration path
+            // which always removes the marker file
+            finalize(main_loop, saved_passphrase != NULL);
             return TRUE;
         default:
             g_set_error_literal(
@@ -101,7 +106,6 @@ static void status_changed_handler(encryption_state status)
                     &error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
                     "Encryption failed");
             signal_encrypt_finished(error);
-            g_main_loop_quit(main_loop);
             g_error_free(error);
             break;
         case ENCRYPTION_FINISHED:
