@@ -400,6 +400,8 @@ void finalize(GMainLoop *main_loop)
 
 void prepare(GMainLoop *main_loop)
 {
+    g_assert(private_data == NULL);  // It's an error to call this twice
+
     private_data = g_new0(manage_data, 1);
     private_data->main_loop = main_loop;
     private_data->preparing = TRUE;
