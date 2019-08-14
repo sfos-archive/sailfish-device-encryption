@@ -75,12 +75,22 @@ static gboolean call_finalize(GError **error)
     switch (get_encryption_status()) {
         case ENCRYPTION_NOT_STARTED:
         case ENCRYPTION_FINISHED:
-            finalize(main_loop, FALSE);
+            if (!finalize(main_loop, FALSE)) {
+                g_set_error_literal(
+                        error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
+                        "Finalize was already called");
+                return FALSE;
+            }
             return TRUE;
         case ENCRYPTION_FAILED:
             // If preparation was used, use restoration path
             // which always removes the marker file
-            finalize(main_loop, saved_passphrase != NULL);
+            if (!finalize(main_loop, saved_passphrase != NULL)) {
+                g_set_error_literal(
+                        error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
+                        "Finalize was already called");
+                return FALSE;
+            }
             return TRUE;
         default:
             g_set_error_literal(

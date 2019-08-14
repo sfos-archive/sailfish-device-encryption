@@ -412,10 +412,13 @@ static void got_bus(GObject *proxy, GAsyncResult *res, gpointer user_data)
             NULL, got_systemd_manager, user_data);
 }
 
-void finalize(GMainLoop *main_loop, gboolean restore)
+gboolean finalize(GMainLoop *main_loop, gboolean restore)
 {
     printf("Restarting user session with encrypted home.\n");
-    if (!private_data) {
+    if (private_data) {
+        if (private_data->tasks != NULL)
+            return FALSE; // Finalize or prepare is already in progress
+    } else {
         private_data = g_new0(manage_data, 1);
         private_data->main_loop = g_main_loop_ref(main_loop);
     }
@@ -431,6 +434,8 @@ void finalize(GMainLoop *main_loop, gboolean restore)
         // Already prepared, skip initialisation
         terminate_user(private_data);
     }
+
+    return TRUE;
 }
 
 void prepare(GMainLoop *main_loop)
