@@ -33,6 +33,7 @@ else
         cp --archive /etc/skel /tmp/home/nemo
         chown --recursive nemo:nemo /tmp/home/nemo
         chmod 750 /tmp/home/nemo
+        add-oneshot --user --late preload-ambience
     fi
 fi
 

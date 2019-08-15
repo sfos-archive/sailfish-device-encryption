@@ -2,6 +2,9 @@
  * Manage user session.
  *
  * Copyright (c) 2019 Jolla Ltd.
+ * Copyright (c) 2019 Open Mobile Platform LLC.
+ *
+ * License: Proprietary.
  */
 
 #include <glib.h>
@@ -22,6 +25,47 @@ typedef struct {
     gchar result[20];
 } job_watch;
 
+typedef enum {
+    END_OF_MANAGE_TASKS,
+    STOP_UNIT,
+    START_UNIT,
+    RELOAD_UNITS,
+    ENABLE_UNIT,
+    CREATE_MARKER,
+    REMOVE_MARKER,
+} manage_action;
+
+typedef struct {
+    manage_action action;
+    const char *argument;
+} manage_task;
+
+const manage_task finalization_tasks[] = {
+    { RELOAD_UNITS, NULL },
+    { ENABLE_UNIT, "jolla-actdead-charging.service" },
+    { START_UNIT, "home.mount" },
+    { STOP_UNIT, "home-encryption-preparation.service" },
+    { START_UNIT, "default.target" },
+    { END_OF_MANAGE_TASKS }
+};
+
+const manage_task preparation_tasks[] = {
+    { RELOAD_UNITS, NULL },
+    { CREATE_MARKER, "/var/lib/sailfish-device-encryption/encrypt-home" },
+    { START_UNIT, "home-encryption-preparation.service" },
+    { START_UNIT, "default.target" },
+    { END_OF_MANAGE_TASKS }
+};
+
+const manage_task restoration_tasks[] = {
+    { RELOAD_UNITS, NULL },
+    { REMOVE_MARKER, "/var/lib/sailfish-device-encryption/encrypt-home" },
+    { START_UNIT, "home.mount" },
+    { STOP_UNIT, "home-encryption-preparation.service" },
+    { START_UNIT, "default.target" },
+    { END_OF_MANAGE_TASKS }
+};
+
 typedef struct {
     GMainLoop *main_loop;
     GDBusConnection *connection;
@@ -30,13 +74,14 @@ typedef struct {
     gulong signal_handler;
     GList *job_watches;
     guint task;
-    gboolean preparing;
+    const manage_task *tasks;
 } manage_data;
 
 static manage_data *private_data = NULL;
 
 static inline void manage_data_free(manage_data *data)
 {
+    g_main_loop_unref(data->main_loop);
     g_object_unref(data->connection);
     g_object_unref(data->systemd_manager);
     g_object_unref(data->login_manager);
@@ -102,38 +147,7 @@ static inline guint get_job_id(GVariant *job)
     return id;
 }
 
-enum unit_action {
-    END_OF_UNIT_TASKS,
-    STOP_UNIT,
-    START_UNIT,
-    RELOAD_UNITS,
-    ENABLE_UNIT,
-    CREATE_MARKER,
-};
-
-typedef struct {
-    enum unit_action action;
-    char *unit;
-} unit_task;
-
-unit_task unit_tasks[] = {
-    { RELOAD_UNITS, NULL },
-    { ENABLE_UNIT, "jolla-actdead-charging.service" },
-    { START_UNIT, "home.mount" },
-    { STOP_UNIT, "home-encryption-preparation.service" },
-    { START_UNIT, "default.target" },
-    { END_OF_UNIT_TASKS }
-};
-
-unit_task preparation_tasks[] = {
-    { RELOAD_UNITS, NULL },
-    { CREATE_MARKER, "/var/lib/sailfish-device-encryption/encrypt-home" },
-    { START_UNIT, "home-encryption-preparation.service" },
-    { START_UNIT, "default.target" },
-    { END_OF_UNIT_TASKS }
-};
-
-static gchar * get_unit_action(enum unit_action action)
+static const gchar *get_unit_action(manage_action action)
 {
     switch (action) {
         case STOP_UNIT:
@@ -144,8 +158,9 @@ static gchar * get_unit_action(enum unit_action action)
             return "Reload";
         case ENABLE_UNIT:
             return "EnableUnitFiles";
-        case END_OF_UNIT_TASKS:
         case CREATE_MARKER:
+        case REMOVE_MARKER:
+        case END_OF_MANAGE_TASKS:
             break;
     }
     return "";
@@ -191,20 +206,36 @@ static void unit_changing_state(
     g_variant_unref(job);
 }
 
+static void create_file(const char *path)
+{
+    FILE *file;
+    printf("Creating file %s\n", path);
+    file = fopen(path, "w");
+    if (!file) {
+        fprintf(stderr, "Failed to create file %s\n", path);
+    } else {
+        fclose(file);
+    }
+}
+
+static void remove_file(const char *path)
+{
+    printf("Removing file %s\n", path);
+    if (unlink(path) < 0)
+        fprintf(stderr, "Failed to remove file %s\n", path);
+}
+
 static void handle_next_unit_task(manage_data *data)
 {
     GVariantBuilder builder;
-    unit_task task;
-
-    if (data->preparing) task = preparation_tasks[data->task];
-    else task = unit_tasks[data->task];
+    manage_task task = data->tasks[data->task];
 
     switch (task.action) {
         case START_UNIT:
         case STOP_UNIT:
             g_dbus_proxy_call(
                     data->systemd_manager, get_unit_action(task.action),
-                    g_variant_new("(ss)", task.unit, "replace"),
+                    g_variant_new("(ss)", task.argument, "replace"),
                     G_DBUS_CALL_FLAGS_NONE, -1, NULL,
                     unit_changing_state, data);
             break;
@@ -216,42 +247,38 @@ static void handle_next_unit_task(manage_data *data)
             break;
         case ENABLE_UNIT:
             g_variant_builder_init(&builder, G_VARIANT_TYPE("as"));
-            g_variant_builder_add(&builder, "s", task.unit);
+            g_variant_builder_add(&builder, "s", task.argument);
             g_dbus_proxy_call(
                     data->systemd_manager, get_unit_action(task.action),
                     g_variant_new("(asbb)", &builder, FALSE, FALSE),
                     G_DBUS_CALL_FLAGS_NONE, -1, NULL,
                     unit_changing_state, data);
             break;
-        case END_OF_UNIT_TASKS:
+        case CREATE_MARKER:
+            create_file(task.argument);
+            break;
+        case REMOVE_MARKER:
+            remove_file(task.argument);
+            break;
+        case END_OF_MANAGE_TASKS:
             g_signal_handler_disconnect(
                     data->systemd_manager, data->signal_handler);
-            if (data->preparing) {
+            if (data->tasks == preparation_tasks) {
                 // Stay waiting for BeginEncryption
                 printf("Preparation done.\n");
-                data->preparing = FALSE;
+                data->tasks = NULL;
                 data->task = 0;
             } else {
                 g_main_loop_quit(data->main_loop);
                 manage_data_free(data);
             }
             return;
-            break;
-        case CREATE_MARKER:
-            printf("Creating marker %s\n", task.unit);
-            FILE *f=fopen(task.unit, "w");
-            if (!f) {
-                fprintf(stderr, "Failed to create marker file %s\n", task.unit);
-            }
-            fclose(f);
-            // To the next one
-            data->task++;
-            handle_next_unit_task(data);
-            return;
-            break;
     }
 
     data->task++;
+
+    if (task.action == CREATE_MARKER || task.action == REMOVE_MARKER)
+        handle_next_unit_task(data);
 }
 
 static void on_signal_from_logind(
@@ -385,24 +412,39 @@ static void got_bus(GObject *proxy, GAsyncResult *res, gpointer user_data)
             NULL, got_systemd_manager, user_data);
 }
 
-void finalize(GMainLoop *main_loop)
+gboolean finalize(GMainLoop *main_loop, gboolean restore)
 {
     printf("Restarting user session with encrypted home.\n");
-    if (!private_data) {
+    if (private_data) {
+        if (private_data->tasks != NULL)
+            return FALSE; // Finalize or prepare is already in progress
+    } else {
         private_data = g_new0(manage_data, 1);
-        private_data->main_loop = main_loop;
+        private_data->main_loop = g_main_loop_ref(main_loop);
+    }
+
+    if (restore)
+        private_data->tasks = restoration_tasks;
+    else
+        private_data->tasks = finalization_tasks;
+
+    if (private_data->connection == NULL) {
         g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, private_data);
     } else {
         // Already prepared, skip initialisation
         terminate_user(private_data);
     }
+
+    return TRUE;
 }
 
 void prepare(GMainLoop *main_loop)
 {
+    g_assert(private_data == NULL);  // It's an error to call this twice
+
     private_data = g_new0(manage_data, 1);
-    private_data->main_loop = main_loop;
-    private_data->preparing = TRUE;
+    private_data->main_loop = g_main_loop_ref(main_loop);
+    private_data->tasks = preparation_tasks;
     printf("Preparing encrypted home.\n");
     g_bus_get(G_BUS_TYPE_SYSTEM, NULL, got_bus, private_data);
 }

@@ -1,4 +1,9 @@
-/* Copyright (c) 2019 Jolla Ltd. */
+/*
+ * Copyright (c) 2019 Jolla Ltd.
+ * Copyright (c) 2019 Open Mobile Platform LLC.
+ *
+ * License: Proprietary
+ */
 
 #include <glib.h>
 #include <stdio.h>
@@ -24,20 +29,26 @@ static erase_t erase_type = DONT_ERASE;
 
 static gboolean call_prepare(gchar *passphrase, erase_t erase, GError **error)
 {
-    if (get_encryption_status() == ENCRYPTION_NOT_STARTED) {
-        saved_passphrase = passphrase;
-        erase_type = erase;
-
-        prepare(main_loop);
-
-        return TRUE;
-    } else {
+    if (saved_passphrase != NULL) {
         g_free(passphrase);
         g_set_error_literal(
                 error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
-                "Encryption is already work in progress");
+                "Preparation was already done");
         return FALSE;
     }
+
+    if (get_encryption_status() != ENCRYPTION_NOT_STARTED) {
+        g_free(passphrase);
+        g_set_error_literal(
+                error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
+                "Encryption is already in progress");
+        return FALSE;
+    }
+
+    saved_passphrase = passphrase;
+    erase_type = erase;
+    prepare(main_loop);
+    return TRUE;
 }
 
 static gboolean call_encrypt(
@@ -64,7 +75,22 @@ static gboolean call_finalize(GError **error)
     switch (get_encryption_status()) {
         case ENCRYPTION_NOT_STARTED:
         case ENCRYPTION_FINISHED:
-            finalize(main_loop);
+            if (!finalize(main_loop, FALSE)) {
+                g_set_error_literal(
+                        error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
+                        "Finalize was already called");
+                return FALSE;
+            }
+            return TRUE;
+        case ENCRYPTION_FAILED:
+            // If preparation was used, use restoration path
+            // which always removes the marker file
+            if (!finalize(main_loop, saved_passphrase != NULL)) {
+                g_set_error_literal(
+                        error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
+                        "Finalize was already called");
+                return FALSE;
+            }
             return TRUE;
         default:
             g_set_error_literal(
@@ -90,7 +116,6 @@ static void status_changed_handler(encryption_state status)
                     &error, ENCRYPTION_ERROR, ENCRYPTION_ERROR_FAILED,
                     "Encryption failed");
             signal_encrypt_finished(error);
-            g_main_loop_quit(main_loop);
             g_error_free(error);
             break;
         case ENCRYPTION_FINISHED:
