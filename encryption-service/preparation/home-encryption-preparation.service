@@ -4,7 +4,9 @@
 Description=Home encryption preparation service
 After=home.mount
 Before=multi-user.target systemd-user-sessions.service connman.service
+Before=alien-service-manager.service aliendalvik.service apkd.service
 ConditionPathExists=/var/lib/sailfish-device-encryption/encrypt-home
+Conflicts=aliendalvik.service
 
 [Service]
 Type=oneshot
