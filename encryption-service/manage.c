@@ -13,6 +13,9 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <usb-moded/usb_moded-modes.h>
+#include <usb-moded/usb_moded-dbus.h>
+
 #include "manage.h"
 
 #define NEMO_UID 100000
@@ -77,10 +80,12 @@ typedef struct {
     GDBusConnection *connection;
     GDBusProxy *systemd_manager;
     GDBusProxy *login_manager;
+    GDBusProxy *usb_moded;
     gulong signal_handler;
     GList *job_watches;
     guint task;
     const manage_task *tasks;
+    gchar *orig_usb_mode;
 } manage_data;
 
 static manage_data *private_data = NULL;
@@ -91,7 +96,9 @@ static inline void manage_data_free(manage_data *data)
     g_object_unref(data->connection);
     g_object_unref(data->systemd_manager);
     g_object_unref(data->login_manager);
+    g_object_unref(data->usb_moded);
     g_list_free_full(data->job_watches, g_free);
+    g_free(data->orig_usb_mode);
     g_free(data);
 }
 
@@ -138,6 +145,9 @@ static void on_signal_from_systemd(
         }
         w = w->next;
     }
+    g_free(path);
+    g_free(unit);
+    g_free(result);
 }
 
 static inline guint get_job_id(GVariant *job)
@@ -150,6 +160,7 @@ static inline guint get_job_id(GVariant *job)
     if (!sscanf(path, "/org/freedesktop/systemd1/job/%u", &id))
         g_assert_not_reached();
 
+    g_free(path);
     return id;
 }
 
@@ -297,6 +308,14 @@ static void handle_next_unit_task(manage_data *data)
                 data->tasks = NULL;
                 data->task = 0;
             } else {
+                if (data->orig_usb_mode) {
+                    // Restore USB mode back to the original
+                    g_dbus_proxy_call_sync(
+                            data->usb_moded, USB_MODE_STATE_SET,
+                            g_variant_new("(s)", data->orig_usb_mode),
+                            G_DBUS_CALL_FLAGS_NONE, -1, NULL,
+                            NULL);
+                }
                 g_main_loop_quit(data->main_loop);
                 manage_data_free(data);
             }
@@ -318,12 +337,11 @@ static void on_signal_from_logind(
 {
     manage_data *data = user_data;
     guint32 id;
-    gchar *path;
 
     if (strcmp(name, "UserRemoved") != 0)
         return;
 
-    g_variant_get(parameters, "(uo)", &id, &path);
+    g_variant_get(parameters, "(uo)", &id, NULL);
 
     if (id != NEMO_UID)
         return;
@@ -348,6 +366,86 @@ static void terminate_user(manage_data *data)
             NULL, NULL);
 }
 
+static void got_set_mode(
+        GObject *proxy,
+        GAsyncResult *res,
+        gpointer user_data)
+{
+    manage_data *data = user_data;
+    GError *error = NULL;
+    GVariant *result;
+
+    result = g_dbus_proxy_call_finish((GDBusProxy *)proxy, res, &error);
+    if (result == NULL) {
+        fprintf(stderr, "%s\n", error->message);
+        g_error_free(error);
+        g_free(data->orig_usb_mode);
+        data->orig_usb_mode = NULL;
+    }
+    g_variant_unref(result);
+
+    // Continue with the encryption
+    terminate_user(data);
+}
+
+static void got_mode_request(
+        GObject *proxy,
+        GAsyncResult *res,
+        gpointer user_data)
+{
+    manage_data *data = user_data;
+    GError *error = NULL;
+    GVariant *result;
+    gchar *mode;
+
+    result = g_dbus_proxy_call_finish((GDBusProxy *)proxy, res, &error);
+    if (result == NULL) {
+        fprintf(stderr, "%s\n", error->message);
+        g_error_free(error);
+        // Continue with the encryption
+        terminate_user(data);
+        return;
+    }
+    g_variant_get(result, "(s)", &mode);
+    g_variant_unref(result);
+
+    // Change mode if not charging or developer mode
+    if (strcmp(mode, MODE_CHARGING) && strcmp(mode, MODE_DEVELOPER)) {
+        data->orig_usb_mode = mode;
+        g_dbus_proxy_call(
+            data->usb_moded, USB_MODE_STATE_SET,
+            g_variant_new("(s)", MODE_CHARGING),
+            G_DBUS_CALL_FLAGS_NONE, -1, NULL,
+            got_set_mode, data);
+    } else {
+        g_free(mode);
+        // Continue with the encryption
+        terminate_user(data);
+    }
+}
+
+static void got_usb_moded(
+        GObject *proxy,
+        GAsyncResult *res,
+        gpointer user_data)
+{
+    manage_data *data = user_data;
+    GError *error = NULL;
+
+    data->usb_moded = g_dbus_proxy_new_finish(res, &error);
+    if (data->usb_moded == NULL) {
+        fprintf(stderr, "%s\n", error->message);
+        g_error_free(error);
+        // Continue with the encryption
+        terminate_user(data);
+    } else {
+        g_dbus_proxy_call(
+                data->usb_moded, USB_MODE_TARGET_STATE_GET,
+                NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL,
+                got_mode_request, user_data);
+    }
+}
+
 static void got_subscription(
         GObject *proxy,
         GAsyncResult *res,
@@ -367,7 +465,13 @@ static void got_subscription(
     }
     g_variant_unref(result);
 
-    terminate_user(data);
+    // Acquire USB daemon proxy to check its state
+    g_dbus_proxy_new(
+            data->connection, G_DBUS_PROXY_FLAGS_NONE, NULL,
+            "com.meego.usb_moded",
+            "/com/meego/usb_moded",
+            "com.meego.usb_moded",
+            NULL, got_usb_moded, user_data);
 }
 
 static void got_login_manager(
@@ -432,6 +536,7 @@ static void got_bus(GObject *proxy, GAsyncResult *res, gpointer user_data)
         return;
     }
 
+    // Systemd proxy
     g_dbus_proxy_new(
             data->connection, G_DBUS_PROXY_FLAGS_NONE, NULL,
             "org.freedesktop.systemd1",

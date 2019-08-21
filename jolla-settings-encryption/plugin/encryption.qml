@@ -38,6 +38,10 @@ Page {
         id: battery
     }
 
+    USBSettings {
+        id: usbSettings
+    }
+
     EncryptionSettings {
         id: encryptionSettings
 
@@ -98,6 +102,7 @@ Page {
 
         Column {
             id: content
+            width: parent.width
 
             PageHeader {
                 //% "Encryption"
@@ -144,6 +149,44 @@ Page {
                 width: 1
                 height: Theme.paddingLarge
                 visible: batteryWarning.visible
+            }
+
+            Item {
+                id: mtpWarning
+
+                width: parent.width - 2*Theme.horizontalPageMargin
+                height: Math.max(mtpIcon.height, mtpText.height)
+                x: Theme.horizontalPageMargin
+                visible: usbSettings.currentMode == usbSettings.MODE_MTP && !encryptionSettings.homeEncrypted
+
+                Image {
+                    id: mtpIcon
+                    anchors.verticalCenter: parent.verticalCenter
+                    source: "image://theme/icon-m-usb"
+                }
+
+                Label {
+                    id: mtpText
+
+                    anchors {
+                        left: mtpIcon.right
+                        leftMargin: Theme.paddingMedium
+                        right: parent.right
+                        verticalCenter: parent.verticalCenter
+                    }
+                    font.pixelSize: Theme.fontSizeMedium
+                    color: Theme.highlightColor
+                    wrapMode: Text.Wrap
+                    text: //: USB MTP mode disconnect warning
+                          //% "Media transfer (MTP) will be disconnected."
+                          qsTrId("settings_encryption-la-mtp_disconnect")
+                }
+            }
+
+            Item {
+                width: 1
+                height: Theme.paddingLarge
+                visible: mtpWarning.visible
             }
 
             Label {
