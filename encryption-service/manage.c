@@ -31,6 +31,8 @@ typedef enum {
     START_UNIT,
     RELOAD_UNITS,
     ENABLE_UNIT,
+    MASK_UNIT,
+    UNMASK_UNIT,
     CREATE_MARKER,
     REMOVE_MARKER,
 } manage_action;
@@ -41,6 +43,7 @@ typedef struct {
 } manage_task;
 
 const manage_task finalization_tasks[] = {
+    { UNMASK_UNIT, "home.mount" },
     { RELOAD_UNITS, NULL },
     { ENABLE_UNIT, "jolla-actdead-charging.service" },
     { START_UNIT, "home.mount" },
@@ -53,11 +56,14 @@ const manage_task preparation_tasks[] = {
     { RELOAD_UNITS, NULL },
     { CREATE_MARKER, "/var/lib/sailfish-device-encryption/encrypt-home" },
     { START_UNIT, "home-encryption-preparation.service" },
+    { MASK_UNIT, "home.mount" },
+    { RELOAD_UNITS, NULL },
     { START_UNIT, "default.target" },
     { END_OF_MANAGE_TASKS }
 };
 
 const manage_task restoration_tasks[] = {
+    { UNMASK_UNIT, "home.mount" },
     { RELOAD_UNITS, NULL },
     { REMOVE_MARKER, "/var/lib/sailfish-device-encryption/encrypt-home" },
     { START_UNIT, "home.mount" },
@@ -158,12 +164,47 @@ static const gchar *get_unit_action(manage_action action)
             return "Reload";
         case ENABLE_UNIT:
             return "EnableUnitFiles";
+        case MASK_UNIT:
+            return "MaskUnitFiles";
+        case UNMASK_UNIT:
+            return "UnmaskUnitFiles";
         case CREATE_MARKER:
         case REMOVE_MARKER:
         case END_OF_MANAGE_TASKS:
             break;
     }
     return "";
+}
+
+static GVariant *get_unit_arguments(manage_task task)
+{
+    GVariantBuilder builder;
+
+    switch (task.action) {
+        case START_UNIT:
+        case STOP_UNIT:
+            return g_variant_new("(ss)", task.argument, "replace");
+        case RELOAD_UNITS:
+            return NULL;
+        case ENABLE_UNIT:
+            g_variant_builder_init(&builder, G_VARIANT_TYPE("as"));
+            g_variant_builder_add(&builder, "s", task.argument);
+            return g_variant_new("(asbb)", &builder, FALSE, FALSE);
+        case MASK_UNIT:
+            g_variant_builder_init(&builder, G_VARIANT_TYPE("as"));
+            g_variant_builder_add(&builder, "s", task.argument);
+            // runtime: true, masking is removed on reboot
+            return g_variant_new("(asbb)", &builder, TRUE, FALSE);
+        case UNMASK_UNIT:
+            g_variant_builder_init(&builder, G_VARIANT_TYPE("as"));
+            g_variant_builder_add(&builder, "s", task.argument);
+            return g_variant_new("(asb)", &builder, FALSE);
+        case CREATE_MARKER:
+        case REMOVE_MARKER:
+        case END_OF_MANAGE_TASKS:
+            break;
+    }
+    return NULL;
 }
 
 static void handle_next_unit_task(manage_data *data);
@@ -227,32 +268,19 @@ static void remove_file(const char *path)
 
 static void handle_next_unit_task(manage_data *data)
 {
-    GVariantBuilder builder;
     manage_task task = data->tasks[data->task];
 
     switch (task.action) {
         case START_UNIT:
         case STOP_UNIT:
-            g_dbus_proxy_call(
-                    data->systemd_manager, get_unit_action(task.action),
-                    g_variant_new("(ss)", task.argument, "replace"),
-                    G_DBUS_CALL_FLAGS_NONE, -1, NULL,
-                    unit_changing_state, data);
-            break;
         case RELOAD_UNITS:
-            g_dbus_proxy_call(
-                    data->systemd_manager, get_unit_action(task.action),
-                    NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL,
-                    unit_changing_state, data);
-            break;
         case ENABLE_UNIT:
-            g_variant_builder_init(&builder, G_VARIANT_TYPE("as"));
-            g_variant_builder_add(&builder, "s", task.argument);
+        case MASK_UNIT:
+        case UNMASK_UNIT:
             g_dbus_proxy_call(
                     data->systemd_manager, get_unit_action(task.action),
-                    g_variant_new("(asbb)", &builder, FALSE, FALSE),
-                    G_DBUS_CALL_FLAGS_NONE, -1, NULL,
-                    unit_changing_state, data);
+                    get_unit_arguments(task), G_DBUS_CALL_FLAGS_NONE, -1,
+                    NULL, unit_changing_state, data);
             break;
         case CREATE_MARKER:
             create_file(task.argument);
