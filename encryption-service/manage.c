@@ -4,7 +4,7 @@
  * Copyright (c) 2019 Jolla Ltd.
  * Copyright (c) 2019 Open Mobile Platform LLC.
  *
- * License: Proprietary.
+ * License: Proprietary
  */
 
 #include <glib.h>

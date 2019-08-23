@@ -1,4 +1,8 @@
-/* Copyright (c) 2019 Jolla Ltd. */
+/*
+ * Copyright (c) 2019 Jolla Ltd.
+ *
+ * License: Proprietary
+ */
 
 #ifndef __ENCRYPT_H
 #define __ENCRYPT_H

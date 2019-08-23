@@ -1,5 +1,7 @@
 /*
- * Copyright (C) 2019 Jolla Ltd
+ * Copyright (C) 2019 Jolla Ltd.
+ *
+ * License: Proprietary
  */
 
 #ifndef UNLOCK_AGENT_AGENT_H_

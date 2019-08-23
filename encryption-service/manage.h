@@ -1,4 +1,8 @@
-/* Copyright (c) 2019 Jolla Ltd. */
+/*
+ * Copyright (c) 2019 Jolla Ltd.
+ *
+ * License: Proprietary
+ */
 
 #ifndef __MANAGE_H
 #define __MANAGE_H

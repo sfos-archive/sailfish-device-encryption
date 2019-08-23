@@ -26,7 +26,9 @@ HEADERS += \
     call.h \
     compositor.h \
     devicelocksettings.h \
-    pin.h
+    logging.h \
+    pin.h \
+    touchinput.h
 
 SOURCES += \
     main.cpp \

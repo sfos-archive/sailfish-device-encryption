@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2019 Jolla Ltd.
+ *
+ * License: Proprietary
+ */
+
 #ifndef ENCRYPTION_STATUS_H
 #define ENCRYPTION_STATUS_H
 
