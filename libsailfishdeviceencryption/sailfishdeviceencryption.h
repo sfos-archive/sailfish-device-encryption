@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2019 Jolla Ltd.
+ *
+ * License: Proprietary
+ */
+
 #ifndef SAILFISH_DEVICE_ENCRYPTION
 #define SAILFISH_DEVICE_ENCRYPTION
 

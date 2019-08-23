@@ -1,5 +1,8 @@
 /*
  * Copyright (c) 2019 Jolla Ltd.
+ * Copyright (c) 2019 Open Mobile Platform LLC.
+ *
+ * License: Proprietary
  */
 
 #include "agent.h"

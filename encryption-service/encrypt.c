@@ -2,6 +2,8 @@
  * Encrypting home.
  *
  * Copyright (c) 2019 Jolla Ltd.
+ *
+ * License: Proprietary
  */
 
 #include <errno.h>

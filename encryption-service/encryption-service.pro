@@ -3,6 +3,7 @@ TEMPLATE = aux
 HEADERS += \
     dbus.h \
     encrypt.h \
+    erase.h \
     manage.h
 
 SOURCES += \

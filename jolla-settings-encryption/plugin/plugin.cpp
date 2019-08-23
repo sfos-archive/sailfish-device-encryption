@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2019 Jolla Ltd.
+ *
+ * License: Proprietary
+ */
+
 #include <QtGlobal>
 #include <QtQml>
 #include <QQmlEngine>
