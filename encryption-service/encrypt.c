@@ -2,6 +2,7 @@
  * Encrypting home.
  *
  * Copyright (c) 2019 Jolla Ltd.
+ * Copyright (c) 2019 Open Mobile Platform LLC.
  *
  * License: Proprietary
  */
@@ -44,6 +45,8 @@
 
 #define TEMPORARY_KEY_FILE \
     "/var/lib/sailfish-device-encryption/temporary-encryption-key"
+#define UPDATE_KEY_FILE \
+    "/var/lib/sailfish-device-encryption/update-encryption-key"
 
 #define QUOTE(s) #s
 #define STR(s) QUOTE(s)
@@ -301,6 +304,13 @@ static void rescan_complete(
     }
 }
 
+static inline void create_empty_file(const char *path)
+{
+    int file = open(path, O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+    if (file != -1)
+        close(file);
+}
+
 static void format_complete(
         GObject *block,
         GAsyncResult *res,
@@ -309,19 +319,14 @@ static void format_complete(
     GVariant *arguments;
     invocation_data *data = user_data;
     GError *error = NULL;
-    int temporary_key_file;
 
     if (udisks_block_call_format_finish((UDisksBlock *)block, res, &error)) {
         set_status(ENCRYPTION_NEEDS_RESCAN);
 
-        if (data->passphrase_is_temporary) {
-            temporary_key_file = g_open(
-                    TEMPORARY_KEY_FILE,
-                    O_TRUNC | O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-            g_close(temporary_key_file, &error);
-            if (error)
-                g_error_free(error);
-        }
+        if (data->passphrase_is_temporary)
+            create_empty_file(TEMPORARY_KEY_FILE);
+        else
+            create_empty_file(UPDATE_KEY_FILE);
 
     } else {
         fprintf(stderr, "%s. Aborting.\n", error->message);

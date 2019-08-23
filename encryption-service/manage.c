@@ -198,7 +198,7 @@ static GVariant *get_unit_arguments(manage_task task)
         case UNMASK_UNIT:
             g_variant_builder_init(&builder, G_VARIANT_TYPE("as"));
             g_variant_builder_add(&builder, "s", task.argument);
-            return g_variant_new("(asb)", &builder, FALSE);
+            return g_variant_new("(asb)", &builder, TRUE);
         case CREATE_MARKER:
         case REMOVE_MARKER:
         case END_OF_MANAGE_TASKS:
