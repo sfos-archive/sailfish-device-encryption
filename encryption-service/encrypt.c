@@ -143,7 +143,7 @@ static inline gboolean set_unit_conf(
     errno = 0;
     if (mkdir(path, S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH) != 0 &&
             errno != EEXIST) {
-        fprintf(stderr, "Could create directory %s: %s. Aborting.\n", path,
+        fprintf(stderr, "Could not create directory %s: %s. Aborting.\n", path,
                 strerror(errno));
         free(path);
         return FALSE;
@@ -156,7 +156,7 @@ static inline gboolean set_unit_conf(
             path, O_TRUNC | O_CREAT | O_WRONLY,
             S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (file == -1) {
-        fprintf(stderr, "Could create file %s: %s. Aborting.\n", path,
+        fprintf(stderr, "Could not create file %s: %s. Aborting.\n", path,
                 strerror(errno));
         free(path);
         return FALSE;
