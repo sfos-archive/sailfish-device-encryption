@@ -78,6 +78,15 @@ BuildRequires:  pkgconfig(Qt5Core)
 %description devel
 %{summary}.
 
+%package qa
+Summary:  Encryption tool for QA
+# This can not be required here because otherwise
+# sailfish-device-encryption would be pulled to every QA image
+# Requires: %%{name} = %%{version}-%%{release}
+
+%description qa
+%{summary}.
+
 %prep
 %setup -q
 
@@ -97,6 +106,11 @@ make %{?_smp_mflags}
 popd
 
 pushd libsailfishdeviceencryption
+%qmake5 "VERSION=%{version}"
+make %{?_smp_mflags}
+popd
+
+pushd qa-encrypt-device
 %qmake5 "VERSION=%{version}"
 make %{?_smp_mflags}
 popd
@@ -125,6 +139,10 @@ chmod 600 %{buildroot}/%{_sysconfdir}/crypttab
 popd
 
 pushd libsailfishdeviceencryption
+%qmake5_install
+popd
+
+pushd qa-encrypt-device
 %qmake5_install
 popd
 
@@ -161,7 +179,6 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %ghost %config(noreplace) %{unit_conf_dir}/systemd-user-sessions.service.d/50-home.conf
 %ghost %dir %{unit_conf_dir}/home.mount.d
 %ghost %config(noreplace) %{unit_conf_dir}/home.mount.d/50-settle.conf
-%ghost %dir %{unit_conf_dir}/systemd-user-sessions.service.d
 %ghost %config(noreplace) %{unit_conf_dir}/home-mount-settle.service.d/50-sailfish-home.conf
 %ghost %config(noreplace) %{unit_conf_dir}/actdead.target.wants/jolla-actdead-charging.service
 
@@ -185,6 +202,11 @@ fi
 %{_libdir}/libsailfishdeviceencryption.a
 %{_libdir}/pkgconfig/sailfishdeviceencryption.pc
 %{_includedir}/libsailfishdeviceencryption
+
+%files qa
+%defattr(-,root,root,-)
+%{_libdir}/startup/qa-encrypt-device
+%{_datadir}/qa-encrypt-device/main.qml
 
 %package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI
