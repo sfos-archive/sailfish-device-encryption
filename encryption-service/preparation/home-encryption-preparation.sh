@@ -38,7 +38,10 @@ else
 fi
 
 # Remove SUW marker files to enter it with pre-user-session mode
-rm -f /tmp/home/nemo/.jolla-startupwizard*
+# except if this is a QA device
+if [ ! -f /usr/lib/startup/qa-encrypt-device ]; then
+    rm -f /tmp/home/nemo/.jolla-startupwizard*
+fi
 
 usermod --home /tmp/home/nemo nemo
 systemctl stop home.mount || true
