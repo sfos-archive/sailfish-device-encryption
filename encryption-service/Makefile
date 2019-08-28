@@ -11,6 +11,7 @@ LIBS += $(shell pkg-config --libs openssl)
 BINDIR = /usr/libexec
 DATADIR = /usr/share/sailfish-device-encryption
 UNITDIR = /usr/lib/systemd/system
+USERUNITDIR = /usr/lib/systemd/user
 DBUSNAME = org.sailfishos.EncryptionService
 DBUS_SYSTEM_DIR = /usr/share/dbus-1/system.d
 DBUS_SERVICE_DIR = /usr/share/dbus-1/system-services
@@ -33,8 +34,26 @@ install-preparation: preparation/home-encryption-preparation.service \
 		$(DESTDIR)/$(DATADIR)/home-encryption-finish.sh
 	$(INSTALL) -m0644 preparation/50-after-preparation.conf \
 		$(DESTDIR)/$(UNITDIR)/mount-sd@.service.d/50-after-preparation.conf
-	$(INSTALL) -m0644 system/packagekit.service.d/01-home-mount.conf \
+
+install-systemd-confs: systemd/01-home-mount.conf systemd/01-prevent-start.conf
+	$(INSTALL) -m0644 systemd/01-home-mount.conf \
 		$(DESTDIR)/$(UNITDIR)/packagekit.service.d/01-home-mount.conf
+	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
+		$(DESTDIR)/$(UNITDIR)/aliendalvik.service.d/01-prevent-start.conf
+	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
+		$(DESTDIR)/$(UNITDIR)/connman.service.d/01-prevent-start.conf
+	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
+		$(DESTDIR)/$(UNITDIR)/connman-vpn.service.d/01-prevent-start.conf
+	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
+		$(DESTDIR)/$(UNITDIR)/dbus-org.nemomobile.MmsEngine.service.d/01-prevent-start.conf
+	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
+		$(DESTDIR)/$(UNITDIR)/dbus-org.nemomobile.provisioning.service.d/01-prevent-start.conf
+	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
+		$(DESTDIR)/$(UNITDIR)/packagekit.service.d/01-prevent-start.conf
+	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
+		$(DESTDIR)/$(UNITDIR)/vnc.service.d/01-prevent-start.conf
+	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
+		$(DESTDIR)/$(USERUNITDIR)/ambienced.service.d/01-prevent-start.conf
 
 install-home-mount-settle-service: home-mount-settle.service
 	$(INSTALL) -m0644 $< $(DESTDIR)/$(UNITDIR)/$<
@@ -53,7 +72,8 @@ install: encryption-service \
 		install-dbus-file \
 		install-service-file \
 		install-home-mount-settle-service \
-		install-preparation
+		install-preparation \
+		install-systemd-confs
 	$(INSTALL) $< $(DESTDIR)/$(BINDIR)/sailfish-encryption-service
 
 clean:

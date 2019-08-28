@@ -7,6 +7,7 @@ URL:        https://bitbucket.org/jolla/ui-sailfish-device-encryption
 Source0:    %{name}-%{version}.tar.bz2
 
 %define unitdir /usr/lib/systemd/system/
+%define userunitdir /usr/lib/systemd/user/
 %define unit_conf_dir /etc/systemd/system/
 %define dbusname org.sailfishos.EncryptionService
 %define dbus_system_dir /usr/share/dbus-1/system.d
@@ -177,6 +178,12 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{unitdir}/local-fs.target.wants/home-encryption-preparation.service
 %{unitdir}/mount-sd@.service.d/50-after-preparation.conf
 %{unitdir}/packagekit.service.d/01-home-mount.conf
+%{unitdir}/aliendalvik.service.d/01-prevent-start.conf
+%{unitdir}/connman.service.d/01-prevent-start.conf
+%{unitdir}/connman-vpn.service.d/01-prevent-start.conf
+%{unitdir}/dbus-org.nemomobile.MmsEngine.service.d/01-prevent-start.conf
+%{unitdir}/dbus-org.nemomobile.provisioning.service.d/01-prevent-start.conf
+%{unitdir}/packagekit.service.d/01-prevent-start.conf
 %{unitdir}/home-mount-settle.service
 %{_datadir}/%{name}
 %dir %{_sharedstatedir}/%{name}
@@ -215,6 +222,8 @@ fi
 %{_libdir}/startup/qa-encrypt-device
 %{_datadir}/qa-encrypt-device/main.qml
 %attr(755, root, -) %{_oneshotdir}/50-enable-home-encryption
+%{unitdir}/vnc.service.d/01-prevent-start.conf
+%{userunitdir}/ambienced.service.d/01-prevent-start.conf
 
 %package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI
