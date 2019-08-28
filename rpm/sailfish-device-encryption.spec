@@ -80,12 +80,19 @@ BuildRequires:  pkgconfig(Qt5Core)
 
 %package qa
 Summary:  Encryption tool for QA
+Requires: oneshot
+%{_oneshot_requires_post}
 # This can not be required here because otherwise
 # sailfish-device-encryption would be pulled to every QA image
 # Requires: %%{name} = %%{version}-%%{release}
 
 %description qa
 %{summary}.
+
+%post qa
+if [ "$1" -eq 1 ]; then
+    %{_bindir}/add-oneshot --late 50-enable-home-encryption
+fi
 
 %prep
 %setup -q
@@ -207,6 +214,7 @@ fi
 %defattr(-,root,root,-)
 %{_libdir}/startup/qa-encrypt-device
 %{_datadir}/qa-encrypt-device/main.qml
+%attr(755, root, -) %{_oneshotdir}/50-enable-home-encryption
 
 %package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI
