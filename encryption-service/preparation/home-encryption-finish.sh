@@ -1,8 +1,5 @@
 #!/bin/sh
 
-# If encryption finished, remove marker file, otherwise exit
-[ -s /etc/crypttab ] && rm -f /var/lib/sailfish-device-encryption/encrypt-home
-
 usermod --home /home/nemo nemo
 
 # Move /home back to /home partition if it is mounted
@@ -13,3 +10,6 @@ fi
 
 # Clean up
 rm -rf /tmp/home/
+
+# If encryption finished, remove marker file
+[ -s /etc/crypttab ] && rm -f /var/lib/sailfish-device-encryption/encrypt-home

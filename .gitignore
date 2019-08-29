@@ -13,5 +13,6 @@ moc_*
 documentation.list
 installroot
 RPMS
-sailfish-unlock-ui
+sailfish-unlock-ui/sailfish-unlock-ui
 encryption-service/encryption-service
+qa-encrypt-device/qa-encrypt-device

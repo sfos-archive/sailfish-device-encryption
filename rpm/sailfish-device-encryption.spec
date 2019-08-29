@@ -7,6 +7,7 @@ URL:        https://bitbucket.org/jolla/ui-sailfish-device-encryption
 Source0:    %{name}-%{version}.tar.bz2
 
 %define unitdir /usr/lib/systemd/system/
+%define userunitdir /usr/lib/systemd/user/
 %define unit_conf_dir /etc/systemd/system/
 %define dbusname org.sailfishos.EncryptionService
 %define dbus_system_dir /usr/share/dbus-1/system.d
@@ -78,6 +79,22 @@ BuildRequires:  pkgconfig(Qt5Core)
 %description devel
 %{summary}.
 
+%package qa
+Summary:  Encryption tool for QA
+Requires: oneshot
+%{_oneshot_requires_post}
+# This can not be required here because otherwise
+# sailfish-device-encryption would be pulled to every QA image
+# Requires: %%{name} = %%{version}-%%{release}
+
+%description qa
+%{summary}.
+
+%post qa
+if [ "$1" -eq 1 ]; then
+    %{_bindir}/add-oneshot --late 50-enable-home-encryption
+fi
+
 %prep
 %setup -q
 
@@ -97,6 +114,11 @@ make %{?_smp_mflags}
 popd
 
 pushd libsailfishdeviceencryption
+%qmake5 "VERSION=%{version}"
+make %{?_smp_mflags}
+popd
+
+pushd qa-encrypt-device
 %qmake5 "VERSION=%{version}"
 make %{?_smp_mflags}
 popd
@@ -128,6 +150,10 @@ pushd libsailfishdeviceencryption
 %qmake5_install
 popd
 
+pushd qa-encrypt-device
+%qmake5_install
+popd
+
 mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 
 %files
@@ -152,6 +178,12 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{unitdir}/local-fs.target.wants/home-encryption-preparation.service
 %{unitdir}/mount-sd@.service.d/50-after-preparation.conf
 %{unitdir}/packagekit.service.d/01-home-mount.conf
+%{unitdir}/aliendalvik.service.d/01-prevent-start.conf
+%{unitdir}/connman.service.d/01-prevent-start.conf
+%{unitdir}/connman-vpn.service.d/01-prevent-start.conf
+%{unitdir}/dbus-org.nemomobile.MmsEngine.service.d/01-prevent-start.conf
+%{unitdir}/dbus-org.nemomobile.provisioning.service.d/01-prevent-start.conf
+%{unitdir}/packagekit.service.d/01-prevent-start.conf
 %{unitdir}/home-mount-settle.service
 %{_datadir}/%{name}
 %dir %{_sharedstatedir}/%{name}
@@ -161,7 +193,6 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %ghost %config(noreplace) %{unit_conf_dir}/systemd-user-sessions.service.d/50-home.conf
 %ghost %dir %{unit_conf_dir}/home.mount.d
 %ghost %config(noreplace) %{unit_conf_dir}/home.mount.d/50-settle.conf
-%ghost %dir %{unit_conf_dir}/systemd-user-sessions.service.d
 %ghost %config(noreplace) %{unit_conf_dir}/home-mount-settle.service.d/50-sailfish-home.conf
 %ghost %config(noreplace) %{unit_conf_dir}/actdead.target.wants/jolla-actdead-charging.service
 
@@ -185,6 +216,14 @@ fi
 %{_libdir}/libsailfishdeviceencryption.a
 %{_libdir}/pkgconfig/sailfishdeviceencryption.pc
 %{_includedir}/libsailfishdeviceencryption
+
+%files qa
+%defattr(-,root,root,-)
+%{_libdir}/startup/qa-encrypt-device
+%{_datadir}/qa-encrypt-device/main.qml
+%attr(755, root, -) %{_oneshotdir}/50-enable-home-encryption
+%{unitdir}/vnc.service.d/01-prevent-start.conf
+%{userunitdir}/ambienced.service.d/01-prevent-start.conf
 
 %package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI

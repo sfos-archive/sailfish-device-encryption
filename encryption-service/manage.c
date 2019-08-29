@@ -381,8 +381,9 @@ static void got_set_mode(
         g_error_free(error);
         g_free(data->orig_usb_mode);
         data->orig_usb_mode = NULL;
+    } else {
+        g_variant_unref(result);
     }
-    g_variant_unref(result);
 
     // Continue with the encryption
     terminate_user(data);
