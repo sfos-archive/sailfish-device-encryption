@@ -19,6 +19,7 @@ BuildRequires: sailfish-minui-devel >= 0.0.23
 BuildRequires: sailfish-minui-dbus-devel
 BuildRequires: sailfish-minui-label-tool
 BuildRequires: %{name}-l10n-all-translations
+BuildRequires: usb-moded-devel
 BuildRequires: pkgconfig(dsme)
 BuildRequires: pkgconfig(dsme_dbus_if)
 BuildRequires: pkgconfig(glib-2.0)
