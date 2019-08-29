@@ -24,9 +24,12 @@ DBusInterface {
     property string errorString
     property string errorMessage
     property int encryptionStatus
-    readonly property bool encryptionWanted: encryptHome.exists && status !== DBusInterface.Unavailable
-    readonly property bool available: encryptHome.exists && status === DBusInterface.Available
+    property bool serviceSeen
+    readonly property bool encryptionWanted: encryptHome.exists && (status !== DBusInterface.Unavailable || serviceSeen)
+    readonly property bool available: encryptHome.exists && (status === DBusInterface.Available || serviceSeen)
     readonly property bool busy: encryptionWanted && encryptionStatus == EncryptionStatus.Busy
+
+    onStatusChanged: if (status === DBusInterface.Available) serviceSeen = true
 
     // DBusInterface is a QObject so no child items
     property FileWatcher encryptHome: FileWatcher {
