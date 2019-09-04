@@ -11,6 +11,7 @@
 #include "logging.h"
 #include "pin.h"
 #include <sailfish-minui-dbus/eventloop.h>
+#include <sailfish-minui/display.h>
 
 #define ACCEPT_CODE 28
 #define CANCEL_CODE 1
@@ -608,10 +609,10 @@ void PinUi::updatesEnabledChanged()
     if (prev != m_displayOn) {
         if (m_displayOn) {
             log_debug("unblank");
-            gr_fb_blank(false);
+            MinUi::Display::instance()->unblank();
         } else {
             log_debug("blank");
-            gr_fb_blank(true);
+            MinUi::Display::instance()->blank();
         }
     }
 
