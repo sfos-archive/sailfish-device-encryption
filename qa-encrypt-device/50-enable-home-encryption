@@ -6,4 +6,6 @@ if [ -f /var/lib/sailfish-device-encryption/encrypt-home ]; then
     systemctl daemon-reload
     # Run home encryption, will also unmask home.mount
     /usr/lib/startup/qa-encrypt-device
+    # Modify pam system-auth to get QA ssh access in acting dead
+    sed -i '/pam_systemd.so/c\-session     optional      pam_systemd.so timeout=10' /etc/pam.d/system-auth
 fi
