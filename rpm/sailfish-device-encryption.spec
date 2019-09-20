@@ -81,6 +81,7 @@ BuildRequires:  pkgconfig(Qt5Core)
 
 %package qa
 Summary:  Encryption tool for QA
+Requires: sed
 Requires: oneshot
 %{_oneshot_requires_post}
 # This can not be required here because otherwise
