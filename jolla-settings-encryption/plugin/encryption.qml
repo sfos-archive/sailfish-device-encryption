@@ -235,18 +235,58 @@ Page {
                 }
                 enabled: (page.batteryChargeOk || battery.chargerStatus === BatteryStatus.Connected) && !encryptionSettings.homeEncrypted
             }
-        }
 
-        // The whole settings page should be hidden when
-        // home is already encrypted. This view placeholder
-        // can be visible only when / if something happens to the
-        // settings blocker of lipstick-jolla-home.
-        // The about settings has a little bit of info about encrypted
-        // home.
-        ViewPlaceholder {
-            enabled: encryptionSettings.homeEncrypted
-            //% "User data is encrypted."
-            text: qsTrId("settings_encryption-la-encryption_description")
+            Column {
+                id: homeInfoColumn
+                width: parent.width
+                visible: encryptionSettings.homeEncrypted
+
+                SectionHeader {
+                    //% "User data"
+                    text: qsTrId("settings_encryption-la-encryption_description")
+                }
+
+                DetailItem {
+                    //% "Encryption"
+                    label: qsTrId("settings_encryption-la-encryption")
+                    //% "Enabled"
+                    value: qsTrId("settings_encryption-la-enabled")
+                }
+
+                DetailItem {
+                    visible: homeInfo.type
+                    //% "Device type"
+                    label: qsTrId("settings_encryption-la-device_type")
+                    value: homeInfo.type
+                }
+
+                DetailItem {
+                    visible: homeInfo.version
+                    //% "Version"
+                    label: qsTrId("settings_encryption-la-version")
+                    value: homeInfo.version
+                }
+
+                DetailItem {
+                    visible: homeInfo.size > 0
+                    //% "Size"
+                    label: qsTrId("settings_encryption-la-size")
+                    value: Format.formatFileSize(homeInfo.size)
+                }
+            }
+
+            Loader {
+                id: homeInfo
+
+                readonly property string type: item && item.type || ""
+                readonly property string version: item && item.version || ""
+                readonly property double size: item && item.size || 0
+
+                active: encryptionSettings.homeEncrypted
+                sourceComponent: Component {
+                    HomeInfo {}
+                }
+            }
         }
     }
 }
