@@ -11,6 +11,7 @@
 #include <sailfish-mindbus/object.h>
 
 #include "call.h"
+#include "emergencybutton.h"
 
 namespace Sailfish {
 
@@ -137,7 +138,7 @@ private:
     bool m_canShowError;
     bool m_displayOn;
     MinDBus::Object *m_dbus;
-    MinUi::IconButton *m_emergencyButton;
+    EmergencyButton *m_emergencyButton;
     bool m_emergencyMode;
     MinUi::Rectangle *m_emergencyBackground;
     MinUi::Label *m_emergencyLabel;

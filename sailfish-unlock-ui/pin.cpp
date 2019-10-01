@@ -151,13 +151,10 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     // in reality fontSizeSmall but that's currently not exposed from the theme. Hence, iconSizeSmall.
     m_busyIndicator->setY(m_label->y() + m_label->height() + MinUi::theme.iconSizeSmall + 2 * MinUi::theme.paddingLarge);
 
-    m_emergencyButton = new MinUi::IconButton("icon-lockscreen-emergency-call", this);
+    m_emergencyButton = new EmergencyButton("icon-encrypt-emergency-call", "icon-encrypt-emergency-call-pressed", this);
     m_emergencyButton->setX(m_label->x());
     m_emergencyButton->setY(m_busyIndicator->y());
-    MinUi::Palette palette;
-    palette.normal = color_lightred;
-    palette.selected = color_lightred;
-    m_emergencyButton->setPalette(palette);
+
     m_emergencyButton->onActivated([this]() {
         setEmergencyMode(!emergencyMode());
     });
