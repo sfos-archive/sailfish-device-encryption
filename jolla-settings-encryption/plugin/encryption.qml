@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019 Jolla Ltd.
+ * Copyright (c) 2019 Open Mobile Platform LLC.
  *
  * License: Proprietary
  */
@@ -103,10 +104,14 @@ Page {
         Column {
             id: content
             width: parent.width
+            spacing: Theme.paddingLarge
 
             PageHeader {
-                //% "Encryption"
-                title: qsTrId("settings_encryption-he-encryption")
+                title: encryptionSettings.homeEncrypted
+                       ? //% "Encryption information"
+                         qsTrId("settings_encryption-he-encryption_information")
+                       :  //% "Encryption"
+                         qsTrId("settings_encryption-he-encryption")
             }
 
             Item {
@@ -146,12 +151,6 @@ Page {
             }
 
             Item {
-                width: 1
-                height: Theme.paddingLarge
-                visible: batteryWarning.visible
-            }
-
-            Item {
                 id: mtpWarning
 
                 width: parent.width - 2*Theme.horizontalPageMargin
@@ -183,12 +182,6 @@ Page {
                 }
             }
 
-            Item {
-                width: 1
-                height: Theme.paddingLarge
-                visible: mtpWarning.visible
-            }
-
             Label {
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2*Theme.horizontalPageMargin
@@ -207,12 +200,6 @@ Page {
                 text: qsTrId("settings_encryption-la-encrypt_user_data_description").arg(createBackupLink())
 
                 onLinkActivated: pageStack.animatorPush("Sailfish.Vault.MainPage")
-            }
-
-            Item {
-                width: parent.width
-                height: Theme.paddingLarge
-                visible: !encryptionSettings.homeEncrypted
             }
 
             Button {
@@ -248,16 +235,18 @@ Page {
                 }
                 enabled: (page.batteryChargeOk || battery.chargerStatus === BatteryStatus.Connected) && !encryptionSettings.homeEncrypted
             }
+        }
 
-
-
-            ViewPlaceholder {
-                enabled: encryptionSettings.homeEncrypted
-
-                //: Placeholder which is shown when home is already encrypted
-                //% "User data is already encrypted"
-                text: qsTrId("settings_encryption-la-home_is_already_encrypted")
-            }
+        // The whole settings page should be hidden when
+        // home is already encrypted. This view placeholder
+        // can be visible only when / if something happens to the
+        // settings blocker of lipstick-jolla-home.
+        // The about settings has a little bit of info about encrypted
+        // home.
+        ViewPlaceholder {
+            enabled: encryptionSettings.homeEncrypted
+            //% "User data is encrypted."
+            text: qsTrId("settings_encryption-la-encryption_description")
         }
     }
 }

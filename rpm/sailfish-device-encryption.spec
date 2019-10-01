@@ -64,6 +64,7 @@ Encrypts home partition on request.
 
 %package settings
 Summary:  Settings plugin for encryption
+BuildRequires: pkgconfig(systemsettings) >= 0.5.26
 Requires: jolla-settings
 Requires: jolla-settings-system
 Requires: %{name}-service = %{version}-%{release}

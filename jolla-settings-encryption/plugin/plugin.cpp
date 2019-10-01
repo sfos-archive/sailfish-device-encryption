@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2019 Jolla Ltd.
+ * Copyright (c) 2019 Open Mobile Platform LLC.
  *
  * License: Proprietary
  */
@@ -11,6 +12,7 @@
 #include <QTranslator>
 
 #include "encryptionstatus.h"
+#include "homeinfo.h"
 
 // using custom translator so it gets properly removed from qApp when engine is deleted
 class AppTranslator: public QTranslator
@@ -52,6 +54,7 @@ public:
         Q_ASSERT(QLatin1String(uri) == QLatin1String("Sailfish.Encryption"));
 
         qmlRegisterUncreatableType<EncryptionStatus>("Sailfish.Encryption", 1, 0, "EncryptionStatus", "");
+        qmlRegisterType<HomeInfo>("Sailfish.Encryption", 1, 0, "HomeInfo");
     }
 };
 

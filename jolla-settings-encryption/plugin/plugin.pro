@@ -1,14 +1,20 @@
 TEMPLATE = lib
 TARGET = settingsencryptionplugin
-QT += qml quick
+QT += qml quick dbus
 CONFIG += plugin link_pkgconfig
 
 MODULENAME = Sailfish/Encryption
 TARGETPATH = $$[QT_INSTALL_QML]/$$MODULENAME
 TRANSLATIONS_PATH = /usr/share/translations
 
-SOURCES += $$PWD/plugin.cpp
-HEADERS += $$PWD/encryptionstatus.h
+SOURCES += $$PWD/plugin.cpp \
+    $$PWD/homeinfo.cpp
+
+HEADERS += $$PWD/encryptionstatus.h \
+    $$PWD/homeinfo.h
+
+PKGCONFIG += \
+    systemsettings
 
 import.files = qmldir EncryptionService.qml
 import.path = $$TARGETPATH
