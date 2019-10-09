@@ -7,3 +7,5 @@ SUBDIRS += \
 
 OTHER_FILES += \
         rpm/sailfish-device-encryption.spec
+
+jolla-settings-encryption.depends = libsailfishdeviceencryption

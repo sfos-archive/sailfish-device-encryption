@@ -64,6 +64,7 @@ Encrypts home partition on request.
 
 %package settings
 Summary:  Settings plugin for encryption
+BuildRequires: pkgconfig(systemsettings) >= 0.5.26
 Requires: jolla-settings
 Requires: jolla-settings-system
 Requires: %{name}-service = %{version}-%{release}
@@ -100,6 +101,11 @@ fi
 %setup -q
 
 %build
+pushd libsailfishdeviceencryption
+%qmake5 "VERSION=%{version}"
+make %{?_smp_mflags}
+popd
+
 pushd sailfish-unlock-ui
 %qmake5 "VERSION=%{version}"
 make %{?_smp_mflags}
@@ -111,11 +117,6 @@ make %{?_smp_mflags}
 popd
 
 pushd encryption-service
-make %{?_smp_mflags}
-popd
-
-pushd libsailfishdeviceencryption
-%qmake5 "VERSION=%{version}"
 make %{?_smp_mflags}
 popd
 
