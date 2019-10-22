@@ -38,6 +38,7 @@ BuildRequires: pkgconfig(Qt5Gui)
 Requires:      %{name}-unlock-ui
 Requires:      %{name}-service
 Requires:      %{name}-settings
+Requires:      sailfish-setup >= 0.1.2
 
 %description
 %{summary}.
