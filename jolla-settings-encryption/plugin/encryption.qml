@@ -241,9 +241,21 @@ Page {
                 width: parent.width
                 visible: encryptionSettings.homeEncrypted
 
+                Label {
+                    x: Theme.horizontalPageMargin
+                    width: parent.width - 2*x
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Theme.fontSizeSmall
+                    color: Theme.highlightColor
+
+                    //: Shown in the Settings -> Encryption page when user data is already encrypted.
+                    //% "Your user data is encrypted which means that only authorized users can access it. Users are authenticated with security code."
+                    text: qsTrId("settings_encryption-la-encryption_user_data_description")
+                }
+
                 SectionHeader {
                     //% "User data"
-                    text: qsTrId("settings_encryption-la-encryption_description")
+                    text: qsTrId("settings_encryption-la-encryption_user_data")
                 }
 
                 DetailItem {
