@@ -14,7 +14,8 @@ EnvironmentFile=-/var/lib/environment/actdead/*.conf
 ExecStart=/usr/bin/jolla-actdead-charging
 Restart=always
 RestartSec=1
-User=nemo
+User=sailfish-actdead
+SupplementaryGroups=graphics
 
 [Install]
 WantedBy=actdead.target
