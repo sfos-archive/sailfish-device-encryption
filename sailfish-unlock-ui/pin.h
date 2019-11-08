@@ -75,6 +75,7 @@ private:
 
     void updateAcceptVisibility();
     void createUI();
+    void destroyWarningLabel();
 
     bool emergencyMode() const;
     void setEmergencyMode(bool emergency);
