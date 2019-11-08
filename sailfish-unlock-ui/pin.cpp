@@ -33,8 +33,7 @@ PinUi::~PinUi()
     stopInactivityShutdownTimer();
     cancelBatteryEmptyShutdown();
 
-    delete m_warningLabel;
-    m_warningLabel = nullptr;
+    destroyWarningLabel();
 
     delete m_label;
     m_label = nullptr;
@@ -253,19 +252,7 @@ void PinUi::emergencyModeChanged()
         m_key->setAcceptText(m_start_call);
 
         m_emergencyButton->setVisible(false);
-
-        if (!m_speakerButton) {
-            m_speakerButton = new MinUi::IconButton("icon-m-speaker", this);
-            m_speakerButton->centerBetween(*this, MinUi::Left, *this, MinUi::Right);;
-            m_speakerButton->setY(m_label->y() + m_label->height() + m_speakerButton->height() + MinUi::theme.paddingLarge);
-            m_speakerButton->setPalette(palette);
-
-            m_speakerButton->onActivated([this]() {
-                m_call.toggleSpeaker();
-            });
-        } else {
-            m_speakerButton->setVisible(true);
-        }
+        m_busyIndicator->setColor(palette.normal);
     } else {
         m_call.endCall(); // Just in case
         m_emergencyBackground->setVisible(false);
@@ -273,18 +260,18 @@ void PinUi::emergencyModeChanged()
         m_label->setVisible(true);
         m_key->setAcceptVisible(false);
         m_key->setCancelVisible(false);
-        MinUi::Palette palette;
+        m_busyIndicator->setColor(m_palette.pressed);
+
         m_password->setPalette(m_palette);
         m_password->setEchoDelay(100); // Default number masking
         m_key->setPalette(m_palette);
         m_key->setAcceptText(nullptr);
         m_key->setAcceptVisible(false);
         m_emergencyButton->setVisible(true);
-        m_speakerButton->setVisible(false);
-        if (m_warningLabel) {
-            delete m_warningLabel;
-            m_warningLabel = nullptr;
-        }
+        if (m_speakerButton)
+            m_speakerButton->setVisible(false);
+
+        destroyWarningLabel();
     }
 
     /* Handle shutdown policy */
@@ -438,6 +425,12 @@ void PinUi::onBatteryEmptyShutdown()
     m_agent->sendShutdownRequestToDsme();
 }
 
+void PinUi::destroyWarningLabel()
+{
+    delete m_warningLabel;
+    m_warningLabel = nullptr;
+}
+
 MinUi::Label *PinUi::createLabel(const char *name, int y)
 {
     MinUi::Label *label = new MinUi::Label(name, this);
@@ -451,8 +444,7 @@ MinUi::Label *PinUi::createLabel(const char *name, int y)
 void PinUi::reset()
 {
     m_password->setText("");
-    delete m_warningLabel;
-    m_warningLabel = nullptr;
+    destroyWarningLabel();
 }
 
 void PinUi::disableAll()
@@ -626,23 +618,50 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
         return;
     }
 
-    if (m_warningLabel) {
-        delete m_warningLabel;
-        m_warningLabel = nullptr;
-    }
     switch (status) {
+        case Call::Status::Initializing:
+            m_busyIndicator->setRunning(true);
+            destroyWarningLabel();
+            m_warningLabel = createLabel(m_calling_emergency, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
+            m_key->setAcceptText(m_end_call);
+            break;
         case Call::Status::Calling:
+            m_busyIndicator->setRunning(false);
+
+            if (!m_speakerButton) {
+                MinUi::Palette palette;
+                palette.normal = color_red;
+                palette.selected = color_red;
+                palette.disabled = color_red;
+                palette.pressed = color_white;
+
+                m_speakerButton = new MinUi::IconButton("icon-m-speaker", this);
+                m_speakerButton->centerBetween(*this, MinUi::Left, *this, MinUi::Right);;
+                m_speakerButton->setY(m_label->y() + m_label->height() + MinUi::theme.iconSizeSmall + 2 * MinUi::theme.paddingLarge);
+                m_speakerButton->setPalette(palette);
+
+                m_speakerButton->onActivated([this]() {
+                    m_call.toggleSpeaker();
+                });
+            } else {
+                m_speakerButton->setVisible(true);
+            }
+
+            destroyWarningLabel();
             m_warningLabel = createLabel(m_calling_emergency, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
             m_key->setAcceptText(m_end_call);
             break;
         case Call::Status::Error:
+            destroyWarningLabel();
             m_warningLabel = createLabel(m_emergency_call_failed, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
             m_key->setAcceptText(m_start_call);
             break;
         case Call::Status::InvalidNumber:
+            destroyWarningLabel();
             m_warningLabel = createLabel(m_invalid_emergency_number, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
             break;
         case Call::Status::Ended:
+            destroyWarningLabel();
             m_warningLabel = createLabel(m_emergency_call_ended, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
             m_key->setAcceptText(m_start_call);
             createTimer(EMERGENCY_MODE_TIMEOUT, [this]() {
@@ -650,21 +669,25 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
             });
             // Fall through to reset speaker status
         case Call::Status::EarpieceOn: {
-            // Speaker disabled
-            MinUi::Palette palette = m_speakerButton->palette();
-            palette.normal = color_red;
-            palette.selected = color_red;
-            palette.pressed = color_white;
-            m_speakerButton->setPalette(palette);
+            if (m_speakerButton) {
+                // Speaker disabled
+                MinUi::Palette palette = m_speakerButton->palette();
+                palette.normal = color_red;
+                palette.selected = color_red;
+                palette.pressed = color_white;
+                m_speakerButton->setPalette(palette);
+            }
             break;
         }
         case Call::Status::SpeakerOn: {
-           // Speaker enabled
-            MinUi::Palette palette = m_speakerButton->palette();
-            palette.normal = color_white;
-            palette.selected = color_white;
-            palette.pressed = color_red;
-            m_speakerButton->setPalette(palette);
+            if (m_speakerButton) {
+                // Speaker enabled
+                MinUi::Palette palette = m_speakerButton->palette();
+                palette.normal = color_white;
+                palette.selected = color_white;
+                palette.pressed = color_red;
+                m_speakerButton->setPalette(palette);
+            }
             break;
         }
         default:

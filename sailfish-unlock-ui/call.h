@@ -21,6 +21,7 @@ public:
     ~Call();
 
     enum Status {
+        Initializing,   // Ofono initialization ongoing
         Calling,        // Call ongoing, may or may not be active
         Error,          // Some error happened, not calling
         InvalidNumber,  // Invalid number, call was not started
