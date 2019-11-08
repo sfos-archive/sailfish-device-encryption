@@ -157,6 +157,7 @@ void Call::toggleSpeaker()
 void Call::placeCall()
 {
     m_ofonoStatus = OfonoInitializing;
+    m_statusCallback(Initializing);
     // Place the emergency call with ofono
     log_debug("Placing call with ofono");
     if (m_voiceCallManager) {
@@ -187,7 +188,6 @@ void Call::handleModemPath(DBusPendingCall *call)
         log_err(error.name << ": " << error.message);
         m_ofonoStatus = OfonoError;
         m_statusCallback(Error);
-
     } else {
         const char **objectArray = 0;
         int objectCount = 0;
