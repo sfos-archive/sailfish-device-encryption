@@ -409,6 +409,8 @@ void Call::hangUp()
     // Tell ofono to hang up
     disableEmergencyCallMode();
     if (m_ofonoStatus != OfonoCalling) {
+        // Call status status is checked in endCall()
+        m_statusCallback(Ended);
         m_ofonoStatus = OfonoIdle;
         return;
     }
