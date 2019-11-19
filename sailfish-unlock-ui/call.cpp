@@ -24,6 +24,13 @@
 
 #define MSGTYPE(type) resmsg_type_str(type) << " (" << type << ")"
 
+//#define TEST_NUMBER "insert some phone number"
+
+#ifdef TEST_NUMBER
+// Keep this check as is when you commit changes!
+#error TEST_NUMBER must not be defined when building packages
+#endif
+
 using namespace Sailfish;
 
 Call::Call(MinUi::DBus::EventLoop *eventLoop)
@@ -380,7 +387,12 @@ void Call::dial()
         enableEmergencyCallMode();
         m_ofonoStatus = OfonoCalling;
         auto call = m_voiceCallManager->call<MinDBus::ObjectPath>("Dial",
-                m_phoneNumber.empty() ? DEFAULT_EMERGENCY_NUMBER : m_phoneNumber.c_str(), HIDE_CALLERID_DEFAULT);
+#ifdef TEST_NUMBER
+                TEST_NUMBER,
+#else
+                m_phoneNumber.empty() ? DEFAULT_EMERGENCY_NUMBER : m_phoneNumber.c_str(),
+#endif
+                HIDE_CALLERID_DEFAULT);
         call->onFinished([this](MinDBus::ObjectPath call) {
             log_debug("Dialing " << m_phoneNumber << ", call " << call);
             m_callObjectPath.assign(call);
