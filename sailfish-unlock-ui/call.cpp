@@ -19,6 +19,7 @@
 #define OFONO_MODEM_MANAGER_PATH "/"
 #define OFONO_MODEM_INTERFACE "org.ofono.Modem"
 #define OFONO_VOICECALL_MANAGER_INTERFACE "org.ofono.VoiceCallManager"
+#define OFONO_ERROR_OPERATION_IN_PROGRESS "org.ofono.Error.InProgress"
 #define HIDE_CALLERID_DEFAULT ""
 #define DEFAULT_EMERGENCY_NUMBER "112"
 
@@ -77,7 +78,7 @@ void Call::makeCall(std::string &phoneNumber, Callback callback)
             return;
         }
     }
-    if (m_ofonoStatus != OfonoIdle && m_ofonoStatus != OfonoError) {
+    if (calling()) {
         log_warning("Already calling");
         return;
     }
@@ -257,6 +258,8 @@ void Call::handleModemOnline(DBusPendingCall *call)
     DBusMessage *message = dbus_pending_call_steal_reply(call);
     DBusError error = DBUS_ERROR_INIT;
     if (dbus_set_error_from_message(&error, message)) {
+        if (strcmp(error.name, OFONO_ERROR_OPERATION_IN_PROGRESS) == 0)
+            return;  // User had ended call that was starting and started new
         log_err("Could not set modem online! Can not call!");
         log_err(error.name << ": " << error.message);
         m_ofonoStatus = OfonoError;
