@@ -624,6 +624,8 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
             destroyWarningLabel();
             m_warningLabel = createLabel(m_calling_emergency, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
             m_key->setAcceptText(m_end_call);
+            // Cancel possible emergency mode timeout
+            cancelTimer();
             break;
         case Call::Status::Calling:
             m_busyIndicator->setRunning(false);
