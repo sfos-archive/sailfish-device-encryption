@@ -663,6 +663,7 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
             m_busyIndicator->setRunning(false);
             destroyWarningLabel();
             m_warningLabel = createLabel(m_invalid_emergency_number, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
+            m_key->setAcceptText(m_start_call);
             break;
         case Call::Status::Ended:
             m_busyIndicator->setRunning(false);
