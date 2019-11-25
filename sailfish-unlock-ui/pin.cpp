@@ -672,7 +672,7 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
             createTimer(EMERGENCY_MODE_TIMEOUT, [this]() {
                 setEmergencyMode(false);
             });
-            // Fall through to reset speaker status
+            [[fallthrough]]; // fall-through to reset speaker status
         case Call::Status::EarpieceOn: {
             if (m_speakerButton) {
                 // Speaker disabled
