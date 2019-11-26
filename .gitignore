@@ -10,9 +10,10 @@ moc_*
 *.ts
 *.qm
 *.moc
-documentation.list
+*.list
 installroot
 RPMS
 sailfish-unlock-ui/sailfish-unlock-ui
+sailfish-unlock-ui/images/
 encryption-service/encryption-service
 qa-encrypt-device/qa-encrypt-device

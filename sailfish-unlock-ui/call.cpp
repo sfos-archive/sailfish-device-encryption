@@ -389,15 +389,15 @@ void Call::dial()
     case ResourcesAcquired: {
         enableEmergencyCallMode();
         m_ofonoStatus = OfonoCalling;
-        auto call = m_voiceCallManager->call<MinDBus::ObjectPath>("Dial",
+        auto number =
 #ifdef TEST_NUMBER
-                TEST_NUMBER,
+                TEST_NUMBER;
 #else
-                m_phoneNumber.empty() ? DEFAULT_EMERGENCY_NUMBER : m_phoneNumber.c_str(),
+                m_phoneNumber.empty() ? DEFAULT_EMERGENCY_NUMBER : m_phoneNumber.c_str();
 #endif
-                HIDE_CALLERID_DEFAULT);
+        auto call = m_voiceCallManager->call<MinDBus::ObjectPath>("Dial", number, HIDE_CALLERID_DEFAULT);
         call->onFinished([this](MinDBus::ObjectPath call) {
-            log_debug("Dialing " << m_phoneNumber << ", call " << call);
+            log_debug("Dialing " << number << ", call " << call);
             m_callObjectPath.assign(call);
             m_statusCallback(Calling);
         });
