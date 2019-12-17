@@ -14,6 +14,8 @@ SPACE_ON_TMP=$(df -k /tmp | grep -Eo '[0-9]+ +[0-9]+% +/tmp$' | cut -d' ' -f1)
 # calculation includes lost+found even though it's not copied to /tmp
 SPACE_NEEDED=$(du -sck /home/.[!.]* /home/* | grep -E $'\ttotal$' | cut -d$'\t' -f1)
 
+USERS=$(getent group users | cut -d : -f 4 | tr , " ")
+
 if [ $SPACE_ON_TMP -gt $(($SPACE_NEEDED + $EXTRA_SPACE)) ]; then
     # move all stuff
     echo "Everything in /home fits to /tmp, copying all"
@@ -25,23 +27,40 @@ if [ $SPACE_ON_TMP -gt $(($SPACE_NEEDED + $EXTRA_SPACE)) ]; then
 else
     # print warning and move only the necessary stuff
     >&2 echo "Warning: Not enough space to copy everything from /home to /tmp"
-    if [ $SPACE_ON_TMP -gt $(($(du -sk /home/nemo | cut -d$'\t' -f1) + $EXTRA_SPACE)) ]; then
-        echo "Copying just /home/nemo"
-        cp --archive /home/nemo /tmp/home/nemo
+    USER_SPACE=0
+    for user in $USERS; do
+        USER_SPACE=$(( $USER_SPACE + $(du -sk $(getent passwd $user | cut -d : -f 6) | cut -d$'\t' -f1) ))
+    done
+    if [ $SPACE_ON_TMP -gt $(( $USER_SPACE + $EXTRA_SPACE )) ]; then
+        echo "Copying just user directories"
+        for user in $USERS; do
+            cp --archive --parents $(getent passwd $user | cut -d : -f 6) /tmp/
+        done
     else
-        >&2 echo "Warning: Not enough space even for /home/nemo. Creating new."
-        cp --archive /etc/skel /tmp/home/nemo
-        chown --recursive nemo:nemo /tmp/home/nemo
-        chmod 750 /tmp/home/nemo
-        add-oneshot --user --late preload-ambience
+        >&2 echo "Warning: Not enough space. Creating new home directories."
+        for user in $USERS; do
+            USER_HOME=$(getent passwd $user | cut -d : -f 6)
+            NEW_HOME="/tmp${USER_HOME}"
+            mkdir -p $NEW_HOME
+            cp --archive /etc/skel $NEW_HOME
+            chown --recursive $(stat -c '%U:%G' $USER_HOME) $NEW_HOME
+            chmod 750 $NEW_HOME
+        done
+        add-oneshot --all-users --late preload-ambience
     fi
 fi
 
 # Remove SUW marker files to enter it with pre-user-session mode
 # except if this is a QA device
 if [ ! -f /usr/lib/startup/qa-encrypt-device ]; then
-    rm -f /tmp/home/nemo/.jolla-startupwizard*
+    for user in $USERS; do
+        USER_HOME=$(getent passwd $user | cut -d : -f 6)
+        rm -f /tmp${USER_HOME}/.jolla-startupwizard*
+    done
 fi
 
-usermod --home /tmp/home/nemo nemo
+for user in $USERS; do
+    USER_HOME=$(getent passwd $user | cut -d : -f 6)
+    usermod --home /tmp${USER_HOME} $user
+done
 systemctl stop home.mount || true

@@ -22,7 +22,7 @@
 #define ENCRYPTION_METHOD "BeginEncryption"
 #define ENCRYPTION_FINISHED_SIGNAL "EncryptionFinished"
 #define FINALIZATION_METHOD "FinalizeEncryption"
-#define PRIVILEGED_ONLY_POLICY "1;user(nemo:privileged) = allow;"
+#define PRIVILEGED_ONLY_POLICY "1;group(privileged) = allow;"
 
 static const gchar introspection_xml[] =
     "<node>"

@@ -1,9 +1,18 @@
 #!/bin/sh
 
-usermod --home /home/nemo nemo
+HOME_WIPED=""
+USERS=$(getent group users | cut -d : -f 4 | tr , " ")
+for user in $USERS; do
+    HOME_DIR=$(getent passwd $user | cut -d : -f 6)
+    NEW_HOME=${HOME_DIR##/tmp}
+    usermod --home $NEW_HOME $user
+    if [ ! -e $NEW_HOME ]; then
+        HOME_WIPED="1"
+    fi
+done
 
 # Move /home back to /home partition if it is mounted
-if $(mount | grep -q " on /home type" && [ ! -e /home/nemo ]); then
+if $(mount | grep -q " on /home type") && [ "$HOME_WIPED" != "" ]; then
     # /home was wiped, copy stuff back
     mv --target-directory=/home/ /tmp/home/.[!.]* /tmp/home/*
 fi

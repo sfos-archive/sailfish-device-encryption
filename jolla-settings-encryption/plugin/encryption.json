@@ -1,5 +1,6 @@
 {
     "translation_catalog": "settings-encryption",
+    "required_group": "sailfish-system",
     "entries": [
     {
         "path": "system_settings/security/encryption",
