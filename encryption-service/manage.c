@@ -11,14 +11,15 @@
 #include <gio/gio.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <grp.h>
+#include <pwd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <usb-moded/usb_moded-modes.h>
 #include <usb-moded/usb_moded-dbus.h>
+#include <sailfishaccesscontrol/sailfishaccesscontrol.h>
 
 #include "manage.h"
-
-#define NEMO_UID 100000
 
 typedef void (*job_handler)(GDBusProxy *proxy, guint32 id, gpointer user_data);
 
@@ -86,6 +87,7 @@ typedef struct {
     guint task;
     const manage_task *tasks;
     gchar *orig_usb_mode;
+    guint uid;
 } manage_data;
 
 static manage_data *private_data = NULL;
@@ -343,7 +345,7 @@ static void on_signal_from_logind(
 
     g_variant_get(parameters, "(uo)", &id, NULL);
 
-    if (id != NEMO_UID)
+    if (id != data->uid)
         return;
 
     g_signal_handler_disconnect(data->login_manager, data->signal_handler);
@@ -355,13 +357,21 @@ static void on_signal_from_logind(
 
 static void terminate_user(manage_data *data)
 {
+    data->uid = sailfish_access_control_systemuser_uid();
+    if (data->uid == SAILFISH_UNDEFINED_UID) {
+        fprintf(stderr, "Unable to detect system user\n");
+        g_main_loop_quit(data->main_loop);
+        manage_data_free(data);
+        return;
+    }
+
     data->signal_handler = g_signal_connect(
             data->login_manager, "g-signal",
             G_CALLBACK(on_signal_from_logind), data);
 
     g_dbus_proxy_call(
             data->login_manager, "TerminateUser",
-            g_variant_new("(u)", NEMO_UID),
+            g_variant_new("(u)", data->uid),
             G_DBUS_CALL_FLAGS_NONE, -1, NULL,
             NULL, NULL);
 }
