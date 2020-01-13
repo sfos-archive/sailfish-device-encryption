@@ -15,8 +15,6 @@
 
 #define ACCEPT_CODE 28
 #define CANCEL_CODE 1
-#define UDISKS_DBUS_NAME "org.freedesktop.UDisks2"
-#define UDISKS_UUID_PROPERTY "DM_UUID"
 #define EMERGENCY_MODE_TIMEOUT 5000
 
 using namespace Sailfish;
