@@ -14,7 +14,7 @@ done
 # Move /home back to /home partition if it is mounted
 if $(mount | grep -q " on /home type") && [ "$HOME_WIPED" != "" ]; then
     # /home was wiped, copy stuff back
-    mv --target-directory=/home/ /tmp/home/.[!.]* /tmp/home/*
+    mv /tmp/home/.[!.]* /tmp/home/* /home/
 fi
 
 # Clean up
