@@ -113,7 +113,7 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     m_key->setCancelVisible(false);
     m_key->setAcceptVisible(false);
     m_key->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_key->setY(window()->height() - m_key->height() - MinUi::theme.paddingLarge);
+    m_key->setY(window()->height() - m_key->height() - MinUi::theme.paddingMedium - window()->height()/20);
     m_key->setPalette(m_palette);
 
     window()->disablePowerButtonSelect();
