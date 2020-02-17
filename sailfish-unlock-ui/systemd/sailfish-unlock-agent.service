@@ -13,5 +13,4 @@ ConditionDirectoryNotEmpty=/run/systemd/ask-password
 
 [Service]
 Type=oneshot
-EnvironmentFile=-/var/lib/environment/nemo/locale.conf
 ExecStart=/usr/libexec/sailfish-unlock-ui
