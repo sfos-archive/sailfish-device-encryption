@@ -47,6 +47,7 @@ else
             chmod 750 $NEW_HOME
         done
         add-oneshot --all-users --late preload-ambience
+        add-oneshot --all-users --late browser-update-default-data
     fi
 fi
 
