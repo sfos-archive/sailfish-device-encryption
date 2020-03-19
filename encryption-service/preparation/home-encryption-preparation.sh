@@ -41,7 +41,7 @@ else
         for user in $USERS; do
             USER_HOME=$(getent passwd $user | cut -d : -f 6)
             NEW_HOME="/tmp${USER_HOME}"
-            mkdir -p $NEW_HOME
+            mkdir -p ${NEW_HOME%/*}
             cp --archive /etc/skel $NEW_HOME
             chown --recursive $(stat -c '%U:%G' $USER_HOME) $NEW_HOME
             chmod 750 $NEW_HOME
