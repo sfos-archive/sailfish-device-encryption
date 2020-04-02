@@ -1,4 +1,5 @@
 #!/bin/sh
+
 # udisks fails if crypttab doesn't exist
 if [ ! -e /etc/crypttab ]; then
     touch /etc/crypttab
@@ -16,6 +17,7 @@ SPACE_NEEDED=$(du -sck /home/.[!.]* /home/* | grep -E $'\ttotal$' | cut -d$'\t' 
 
 USERS=$(getent group users | cut -d : -f 4 | tr , " ")
 
+# Moving content from home partition to temporary location
 if [ $SPACE_ON_TMP -gt $(($SPACE_NEEDED + $EXTRA_SPACE)) ]; then
     # move all stuff
     echo "Everything in /home fits to /tmp, copying all"
@@ -60,8 +62,13 @@ if [ ! -f /usr/lib/startup/qa-encrypt-device ]; then
     done
 fi
 
+# Create any users while encrypting to /tmp/home
+useradd -D -b /tmp/home
+
+# Adjust current users
 for user in $USERS; do
     USER_HOME=$(getent passwd $user | cut -d : -f 6)
     usermod --home /tmp${USER_HOME} $user
 done
+
 systemctl stop home.mount || true

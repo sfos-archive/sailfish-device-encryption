@@ -56,7 +56,7 @@ Summary:  Sailfish Encryption Service
 # Packages of commands required by home-encryption-*.sh scripts
 Requires: coreutils
 Requires: grep
-Requires: shadow-utils
+Requires: shadow-utils >= 4.8.1
 Requires: systemd
 Requires: util-linux
 Requires: oneshot
