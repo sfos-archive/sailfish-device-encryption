@@ -19,6 +19,11 @@ done
 if $(mount | grep -q " on /home type") && [ "$HOME_WIPED" != "" ]; then
     # /home was wiped, copy stuff back
     mv /tmp/home/.[!.]* /tmp/home/* /home/
+    # set device owner's locale if it wasn't set
+    if [ ! -e /home/.system/var/lib/environment/100000/locale.conf ]; then
+        mkdir -p /home/.system/var/lib/environment/100000
+        cp /etc/locale.conf /home/.system/var/lib/environment/100000/locale.conf
+    fi
 fi
 
 # Clean up
