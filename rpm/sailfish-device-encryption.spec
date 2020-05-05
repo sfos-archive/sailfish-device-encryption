@@ -18,6 +18,7 @@ BuildRequires: qt5-qttools-linguist
 BuildRequires: sailfish-minui-devel >= 0.0.24
 BuildRequires: sailfish-minui-dbus-devel
 BuildRequires: sailfish-minui-label-tool
+BuildRequires: sailfish-svg2png >= 0.3.4
 BuildRequires: systemd
 BuildRequires: %{name}-l10n-all-translations
 BuildRequires: usb-moded-devel
@@ -238,74 +239,18 @@ Summary:  Translation source for Sailfish Encryption Unlock UI
 %defattr(-,root,root,-)
 %{_datadir}/translations/source/*.ts
 
-%package unlock-ui-resources-z1.0
-Summary:    Scale factor 1.0 resources for the Sailfish Encryption Unlock UI
-Provides:   %{name}-resources
-Requires:   sailfish-minui-resources-z1.0
+%define sailfish_content_graphics_for_scale(z:d:) \
+%package unlock-ui-resources-%{-z*} \
+Summary:    Scale factor %{-d*} resources for the Sailfish Encryption Unlock UI \
+Provides:   %{name}-resources \
+Requires:   sailfish-minui-resources-%{-z*} \
+\
+%description unlock-ui-resources-%{-z*} \
+%{summary}. \
+\
+%files unlock-ui-resources-%{-z*} \
+%defattr(-,root,root,-) \
+%{_datadir}/sailfish-minui/images/%{-z*}/*.png
 
-%description unlock-ui-resources-z1.0
-%{summary}.
+%sailfish_content_graphics_for_each_scale
 
-%files unlock-ui-resources-z1.0
-%defattr(-,root,root,-)
-%{_datadir}/sailfish-minui/images/z1.0/*.png
-
-%package unlock-ui-resources-z1.25
-Summary:    Scale factor 1.25 resources for the Sailfish Encryption Unlock UI
-Provides:   %{name}-resources
-Requires:   sailfish-minui-resources-z1.25
-
-%description unlock-ui-resources-z1.25
-%{summary}.
-
-%files unlock-ui-resources-z1.25
-%defattr(-,root,root,-)
-%{_datadir}/sailfish-minui/images/z1.25/*.png
-
-%package unlock-ui-resources-z1.5
-Summary:    Scale factor 1.5 resources for the Sailfish Encryption Unlock UI
-Provides:   %{name}-resources
-Requires:   sailfish-minui-resources-z1.5
-
-%description unlock-ui-resources-z1.5
-%{summary}.
-
-%files unlock-ui-resources-z1.5
-%defattr(-,root,root,-)
-%{_datadir}/sailfish-minui/images/z1.5/*.png
-
-%package unlock-ui-resources-z1.5-large
-Summary:    Scale factor 1.5 resources for the Sailfish Encryption Unlock UI
-Provides:   %{name}-resources
-Requires:   sailfish-minui-resources-z1.5-large
-
-%description unlock-ui-resources-z1.5-large
-%{summary}.
-
-%files unlock-ui-resources-z1.5-large
-%defattr(-,root,root,-)
-%{_datadir}/sailfish-minui/images/z1.5-large/*.png
-
-%package unlock-ui-resources-z1.75
-Summary:    Scale factor 1.75 resources for the Sailfish Encryption Unlock UI
-Provides:   %{name}-resources
-Requires:   sailfish-minui-resources-z1.75
-
-%description unlock-ui-resources-z1.75
-%{summary}.
-
-%files unlock-ui-resources-z1.75
-%defattr(-,root,root,-)
-%{_datadir}/sailfish-minui/images/z1.75/*.png
-
-%package unlock-ui-resources-z2.0
-Summary:    Scale factor 2.0 resources for the Sailfish Encryption Unlock UI
-Provides:   %{name}-resources
-Requires:   sailfish-minui-resources-z2.0
-
-%description unlock-ui-resources-z2.0
-%{summary}.
-
-%files unlock-ui-resources-z2.0
-%defattr(-,root,root,-)
-%{_datadir}/sailfish-minui/images/z2.0/*.png
