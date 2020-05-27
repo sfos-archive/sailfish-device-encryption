@@ -7,6 +7,7 @@
  * License: Proprietary
  */
 
+#include <errno.h>
 #include <glib.h>
 #include <gio/gio.h>
 #include <stdio.h>
@@ -20,6 +21,9 @@
 #include <sailfishaccesscontrol/sailfishaccesscontrol.h>
 
 #include "manage.h"
+
+#define DEVICE_OWNER_LOCALE \
+    "/home/.system/var/lib/environment/100000/locale.conf"
 
 typedef void (*job_handler)(GDBusProxy *proxy, guint32 id, gpointer user_data);
 
@@ -556,6 +560,32 @@ static void got_bus(GObject *proxy, GAsyncResult *res, gpointer user_data)
             NULL, got_systemd_manager, user_data);
 }
 
+static inline void cleanup_home_dir()
+{
+    // Clean up locale file from home directory
+    char *path = strdup(DEVICE_OWNER_LOCALE);
+    errno = 0;
+    if (unlink(path) < 0 && errno != ENOENT) {
+        fprintf(stderr, "Failed to remove file %s: %s\n",
+                path, strerror(errno));
+    } else {
+        *(strrchr(path, '/')) = '\0';
+        while (strlen(path) > ((sizeof "/home/")-1)) {
+            errno = 0;
+            if (rmdir(path) < 0) {
+                if (errno != ENOTEMPTY && errno != ENOENT) {
+                    fprintf(stderr, "Failed to remove directory %s: %s\n",
+                            path, strerror(errno));
+                }
+                break;
+            }
+            *(strrchr(path, '/')) = '\0';
+        };
+    }
+
+    free(path);
+}
+
 gboolean finalize(GMainLoop *main_loop, gboolean restore)
 {
     printf("Restarting user session with encrypted home.\n");
@@ -566,6 +596,8 @@ gboolean finalize(GMainLoop *main_loop, gboolean restore)
         private_data = g_new0(manage_data, 1);
         private_data->main_loop = g_main_loop_ref(main_loop);
     }
+
+    cleanup_home_dir();
 
     if (restore)
         private_data->tasks = restoration_tasks;
