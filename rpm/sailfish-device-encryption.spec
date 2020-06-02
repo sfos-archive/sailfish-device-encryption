@@ -7,7 +7,6 @@ URL:        https://bitbucket.org/jolla/ui-sailfish-device-encryption
 Source0:    %{name}-%{version}.tar.bz2
 
 %define unitdir /usr/lib/systemd/system/
-%define userunitdir /usr/lib/systemd/user/
 %define unit_conf_dir /etc/systemd/system/
 %define dbusname org.sailfishos.EncryptionService
 %define dbus_system_dir /usr/share/dbus-1/system.d
@@ -19,6 +18,7 @@ BuildRequires: qt5-qttools-linguist
 BuildRequires: sailfish-minui-devel >= 0.0.24
 BuildRequires: sailfish-minui-dbus-devel
 BuildRequires: sailfish-minui-label-tool
+BuildRequires: systemd
 BuildRequires: %{name}-l10n-all-translations
 BuildRequires: usb-moded-devel
 BuildRequires: pkgconfig(sailfishaccesscontrol) >= 0.0.3
@@ -222,11 +222,11 @@ fi
 
 %files qa
 %defattr(-,root,root,-)
-%{_libdir}/startup/qa-encrypt-device
+/usr/lib/startup/qa-encrypt-device
 %{_datadir}/qa-encrypt-device/main.qml
 %attr(755, root, -) %{_oneshotdir}/50-enable-home-encryption
 %{unitdir}/vnc.service.d/01-prevent-start.conf
-%{userunitdir}/ambienced.service.d/01-prevent-start.conf
+%{_userunitdir}/ambienced.service.d/01-prevent-start.conf
 
 %package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI
