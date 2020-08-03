@@ -11,5 +11,15 @@ Item {
     function qsTrIdString() {
         //% "Do you want to encrypt user data?"
         QT_TRID_NOOP("settings_encryption-la-encrypt_user_data_confirmation")
+
+        // Restoration UI translations
+        //% "OK"
+        QT_TRID_NOOP("settings_encryption-la-ok")
+        //% "Restoring user data"
+        QT_TRID_NOOP("settings_encryption-la-restoring-data")
+        //% "Restoring user data failed"
+        QT_TRID_NOOP("settings_encryption-la-restore-fail-summary")
+        //% "Data is kept on memory card"
+        QT_TRID_NOOP("settings_encryption-la-restore-fail-body")
     }
 }

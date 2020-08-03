@@ -9,8 +9,10 @@ Source0:    %{name}-%{version}.tar.bz2
 %define unitdir /usr/lib/systemd/system/
 %define unit_conf_dir /etc/systemd/system/
 %define dbusname org.sailfishos.EncryptionService
+%define copydbusname org.sailfishos.HomeCopyService
 %define dbus_system_dir /usr/share/dbus-1/system.d
 %define dbus_service_dir /usr/share/dbus-1/system-services
+%define mapplauncherd_dir /usr/share/mapplauncherd/privileges.d/
 
 BuildRequires: qt5-qmake
 BuildRequires: qt5-qttools
@@ -99,10 +101,22 @@ if [ "$1" -eq 1 ]; then
     %{_bindir}/add-oneshot --late 50-enable-home-encryption
 fi
 
+%package homecopy
+Summary: Tool for saving user data on home encryption
+Requires: oneshot
+
+%description homecopy
+%{summary}.
+
 %prep
 %setup -q
 
 %build
+pushd home-restoration-ui
+%qmake5 "VERSION=%{version}"
+make %{?_smp_mflags}
+popd
+
 pushd libsailfishdeviceencryption
 %qmake5 "VERSION=%{version}"
 make %{?_smp_mflags}
@@ -122,6 +136,10 @@ pushd encryption-service
 make %{?_smp_mflags}
 popd
 
+pushd homecopy
+make %{?_smp_mflags}
+popd
+
 pushd qa-encrypt-device
 %qmake5 "VERSION=%{version}"
 make %{?_smp_mflags}
@@ -138,11 +156,22 @@ pushd jolla-settings-encryption
 %qmake5_install
 popd
 
+pushd home-restoration-ui
+%qmake5_install
+popd
+
 pushd encryption-service
 make DESTDIR=%{buildroot} install
 mkdir -p %{buildroot}/%{unitdir}/local-fs.target.wants/
 ln -s ../home-encryption-preparation.service \
       %{buildroot}/%{unitdir}/local-fs.target.wants/
+popd
+
+pushd homecopy
+make DESTDIR=%{buildroot} install
+mkdir -p %{buildroot}/%{_userunitdir}/user-session.target.wants/
+ln -s ../home-restore-ui.service \
+      %{buildroot}/%{_userunitdir}/user-session.target.wants/
 
 # Compatiblity and documentation files
 mkdir -p %{buildroot}/%{_sysconfdir}
@@ -229,6 +258,20 @@ fi
 %attr(755, root, -) %{_oneshotdir}/50-enable-home-encryption
 %{unitdir}/vnc.service.d/01-prevent-start.conf
 %{_userunitdir}/ambienced.service.d/01-prevent-start.conf
+
+%files homecopy
+%defattr(-,root,root,-)
+%{unitdir}/dbus-%{copydbusname}.service
+%{_libexecdir}/sailfish-home-copy-service
+%{unitdir}/home-encryption-copy.service
+%{unitdir}/home-restore.service
+%{_userunitdir}/home-restore-ui.service
+%{_userunitdir}/user-session.target.wants/home-restore-ui.service
+%{dbus_system_dir}/%{copydbusname}.conf
+%{dbus_service_dir}/%{copydbusname}.service
+%{_libexecdir}/sailfish-home-restoration
+%{_datadir}/sailfish-home-restoration
+%{mapplauncherd_dir}/sailfish-home-restoration.privileges
 
 %package ts-devel
 Summary:  Translation source for Sailfish Encryption Unlock UI

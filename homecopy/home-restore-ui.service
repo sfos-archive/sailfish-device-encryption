@@ -1,0 +1,13 @@
+[Unit]
+Description=Home restoration service
+Requires=dbus.socket lipstick.service booster-silica-qt5.service user-session.target
+After=dbus.socket lipstick.service booster-silica-qt5.service
+ConditionPathExists=/var/lib/sailfish-device-encryption/home_copy.conf
+
+[Service]
+Type=oneshot
+TimeoutStopSec=60min
+ExecStart=/usr/bin/invoker -o -s --type=generic /usr/libexec/sailfish-home-restoration
+
+[Install]
+WantedBy=user-session.target

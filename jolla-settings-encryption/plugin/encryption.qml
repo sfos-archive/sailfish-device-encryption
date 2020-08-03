@@ -22,8 +22,13 @@ Page {
     readonly property bool batteryChargeOk: battery.chargePercentage > batteryThreshold
     // To be checked
     readonly property bool applicationActive: Qt.application.active
+    // external storage data
+    property string selectedDevPath: "tmp"
+    property bool selectedDevSuitable: false
+    property bool hasHomeCopy: copyHelper.hasHomeCopyService()
 
     property EncryptionService encryptionService
+    property CopyService copyService
 
     function createBackupLink() {
         //: A link to Settings | System | Backup
@@ -35,6 +40,10 @@ Page {
         return "<a href='backup'>" + backup + "</a>"
     }
 
+    function devPath() {
+        return sdSwitch.checked ? selectedDevPath : "tmp"
+    }
+
     BatteryStatus {
         id: battery
     }
@@ -43,9 +52,12 @@ Page {
         id: usbSettings
     }
 
+    CopyHelper {
+        id: copyHelper
+    }
+
     EncryptionSettings {
         id: encryptionSettings
-
         onEncryptingHome: lipstick.startEncryptionPreparation()
         onEncryptHomeError: console.warn("Home encryption failed. Maybe token expired.")
     }
@@ -53,6 +65,11 @@ Page {
     Component {
         id: encryptionServiceComponent
         EncryptionService {}
+    }
+
+    Component {
+        id: copyServiceComponent
+        CopyService {}
     }
 
     DBusInterface {
@@ -75,7 +92,6 @@ Page {
                           function(success) {
                               prepareEncryption.running = true
                           },
-
                           function(error, message) {
                               console.info("Error occured when entering to reboot mode:", error, "message:", message)
                           }
@@ -213,16 +229,32 @@ Page {
                     var obj = pageStack.animatorPush(Qt.resolvedUrl("HomeEncryptionDisclaimer.qml"), {
                                                          "encryptionSettings": encryptionSettings
                                                      })
-
                     var mandatoryDeviceLock
-
                     obj.pageCompleted.connect(function(p) {
                         p.accepted.connect(function() {
                             mandatoryDeviceLock = p.acceptDestinationInstance
                             p.acceptDestinationInstance.authenticated.connect(function(authenticationToken) {
-                                // Enters to "reboot" mode but does not execute actual reboot.
                                 prepareEncryption.securityCode = mandatoryDeviceLock.securityCode
-                                encryptionSettings.encryptHome(authenticationToken)
+                                if (hasHomeCopy)
+                                    page.copyService = copyServiceComponent.createObject(root)
+                                if (sdSwitch.checked) {
+                                    var copyPage = pageStack.animatorPush(Qt.resolvedUrl("SDCopyPage.qml"))
+                                    page.copyService.copyHome(selectedDevPath)
+                                    page.copyService.copied.connect(function(success) {
+                                        if (success) {
+                                            encryptionSettings.encryptHome(authenticationToken)
+                                        } else {
+                                            pageStack.pop(page)
+                                            completeAnimation()
+                                            pageStack.animatorPush(Qt.resolvedUrl("SDCopyFailed.qml"))
+                                            page.copyService.setCopyDev("")
+                                        }
+                                    })
+                                } else {
+                                    if (hasHomeCopy)
+                                        page.copyService.setCopyDev("")
+                                    encryptionSettings.encryptHome(authenticationToken)
+                                }
                             })
                             p.acceptDestinationInstance.canceled.connect(function() {
                                 pageStack.pop(page)
@@ -233,7 +265,77 @@ Page {
                         })
                     })
                 }
-                enabled: (page.batteryChargeOk || battery.chargerStatus === BatteryStatus.Connected) && !encryptionSettings.homeEncrypted
+                enabled: (page.batteryChargeOk || battery.chargerStatus === BatteryStatus.Connected)
+                         && !encryptionSettings.homeEncrypted
+                         && (!sdSwitch.checked || selectedDevSuitable)
+            }
+            TextSwitch {
+                id: sdSwitch
+                //% "Copy user data to memory card"
+                text: qsTrId("settings_encryption-la-use_card")
+                //% "An encrypted memory card can be used to keep user data."
+                description: qsTrId("settings_encryption-la-use_card_description")
+                visible: !encryptionSettings.homeEncrypted && hasHomeCopy && copyHelper.memorycard
+            }
+
+            ComboBox {
+                id: sdComboBox
+                enabled: sdSwitch.checked
+                visible: !encryptionSettings.homeEncrypted && hasHomeCopy && copyHelper.memorycard
+                //% "Encrypt using:"
+                label: qsTrId("settings_encryption-la-encrypt_using")
+
+                menu: ContextMenu {
+                    id: sdMenu
+                    property bool firstUpdate: true
+
+                    Repeater {
+                        id: sdRepeater
+                        model: PartitionModel {
+                            id: partitionModel
+                            storageTypes: PartitionModel.External | PartitionModel.ExcludeParents
+                        }
+
+                        MenuItem {
+                            //% "Memory card: (%1)"
+                            text:  qsTrId("settings_encryption-memory_card").arg(Format.formatFileSize(bytesTotal))
+                            onClicked: {
+                                update()
+                            }
+
+                            Component.onCompleted: {
+                                if (sdMenu.firstUpdate) {
+                                    sdMenu.firstUpdate = false
+                                    update()
+                                }
+                            }
+                            function update() {
+                                page.selectedDevSuitable = ((copyHelper.homeBytes() < bytesFree) && (mountPath !== "")
+                                                           && copyHelper.checkWritable(mountPath))
+
+                                sdComboBox.description = descriptionString((copyHelper.homeBytes() < bytesFree), (mountPath !== ""),
+                                                                           copyHelper.checkWritable(mountPath), isCryptoDevice)
+                                page.selectedDevPath = devicePath
+                            }
+
+                            function descriptionString(homeFits, mounted, writable, encrypted) {
+                                if (!mounted) { //% "Card must be mounted"
+                                    return qsTrId("settings_encryption-la-card_not_mounted")
+                                } else if (!homeFits) { //% "User data doesn't fit SD card"
+                                    return qsTrId("settings_encryption-la-data_doesnt_fit_to_card")
+                                } else if (!writable) { //% "Selected card unwritable"
+                                    return qsTrId("settings_encryption-la-card_unwritable")
+                                } else if (!encrypted) { //% "Card must be encrypted"
+                                    return qsTrId("settings_encryption-la-card_not_encrypted")
+                                } else {
+                                    return ""
+                                }
+                            }
+                        }
+                    }
+                }
+                descriptionColor: Theme.errorColor
+                description: ""
             }
 
             Column {

@@ -15,6 +15,12 @@ fi
 
 mkdir /tmp/home
 
+CONF_FILE="/var/lib/sailfish-device-encryption/home_copy.conf"
+USE_SD=false
+if [ -f $CONF_FILE ] && grep -q "^/dev/" $CONF_FILE; then
+    USE_SD=true
+fi
+
 # Calculate 1/3 of /tmp to keep it free even after copying
 EXTRA_SPACE=$(( $(df -k /tmp | grep -Eo '[0-9]+ +[0-9]+ +[0-9]+ +[0-9]+% +/tmp$' | cut -d' ' -f1) / 3 ))
 # globs below miss files that start with two dots
@@ -24,8 +30,13 @@ SPACE_NEEDED=$(du -sck /home/.[!.]* /home/* | grep -E $'\ttotal$' | cut -d$'\t' 
 
 USERS=$(getent group users | cut -d : -f 4 | tr , " ")
 
+USER_SPACE=0
+for user in $USERS; do
+    USER_SPACE=$(( $USER_SPACE + $(du -sk $(getent passwd $user | cut -d : -f 6) | cut -d$'\t' -f1) ))
+done
+
 # Moving content from home partition to temporary location
-if [ $SPACE_ON_TMP -gt $(($SPACE_NEEDED + $EXTRA_SPACE)) ]; then
+if [ $SPACE_ON_TMP -gt $(($SPACE_NEEDED + $EXTRA_SPACE)) ] && [ "$USE_SD" = false ]; then
     # move all stuff
     echo "Everything in /home fits to /tmp, copying all"
     for dir in /home/.[!.]* /home/*; do
@@ -33,31 +44,23 @@ if [ $SPACE_ON_TMP -gt $(($SPACE_NEEDED + $EXTRA_SPACE)) ]; then
             cp --archive "$dir" "/tmp${dir}"
         fi
     done
-else
-    # print warning and move only the necessary stuff
-    >&2 echo "Warning: Not enough space to copy everything from /home to /tmp"
-    USER_SPACE=0
+elif [ $SPACE_ON_TMP -gt $(( $USER_SPACE + $EXTRA_SPACE )) ] && [ "$USE_SD" = false ]; then
+    echo "Copying just user directories"
     for user in $USERS; do
-        USER_SPACE=$(( $USER_SPACE + $(du -sk $(getent passwd $user | cut -d : -f 6) | cut -d$'\t' -f1) ))
+        cp --archive --parents $(getent passwd $user | cut -d : -f 6) /tmp/
     done
-    if [ $SPACE_ON_TMP -gt $(( $USER_SPACE + $EXTRA_SPACE )) ]; then
-        echo "Copying just user directories"
-        for user in $USERS; do
-            cp --archive --parents $(getent passwd $user | cut -d : -f 6) /tmp/
-        done
-    else
-        >&2 echo "Warning: Not enough space. Creating new home directories."
-        for user in $USERS; do
-            USER_HOME=$(getent passwd $user | cut -d : -f 6)
-            NEW_HOME="/tmp${USER_HOME}"
-            mkdir -p ${NEW_HOME%/*}
-            cp --archive /etc/skel $NEW_HOME
-            chown --recursive $(stat -c '%U:%G' $USER_HOME) $NEW_HOME
-            chmod 750 $NEW_HOME
-        done
-        add-oneshot --all-users --late preload-ambience
-        add-oneshot --all-users --late browser-update-default-data
-    fi
+else
+    echo "Creating new home directories."
+    for user in $USERS; do
+        USER_HOME=$(getent passwd $user | cut -d : -f 6)
+        NEW_HOME="/tmp${USER_HOME}"
+        mkdir -p ${NEW_HOME%/*}
+        cp --archive /etc/skel $NEW_HOME
+        chown --recursive $(stat -c '%U:%G' $USER_HOME) $NEW_HOME
+        chmod 750 $NEW_HOME
+    done
+    add-oneshot --all-users --late preload-ambience
+    add-oneshot --all-users --late browser-update-default-data
 fi
 
 # Remove SUW marker files to enter it with pre-user-session mode
