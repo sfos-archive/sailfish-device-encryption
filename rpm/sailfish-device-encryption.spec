@@ -187,6 +187,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 %{unitdir}/connman-vpn.service.d/01-prevent-start.conf
 %{unitdir}/dbus-org.nemomobile.MmsEngine.service.d/01-prevent-start.conf
 %{unitdir}/dbus-org.nemomobile.provisioning.service.d/01-prevent-start.conf
+%{unitdir}/mdm_proxy.service.d/01-prevent-start.conf
 %{unitdir}/packagekit.service.d/01-prevent-start.conf
 %{unitdir}/home-mount-settle.service
 %{_datadir}/%{name}

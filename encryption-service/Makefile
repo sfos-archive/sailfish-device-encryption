@@ -51,6 +51,8 @@ install-systemd-confs: systemd/01-home-mount.conf systemd/01-prevent-start.conf
 	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
 		$(DESTDIR)/$(UNITDIR)/dbus-org.nemomobile.provisioning.service.d/01-prevent-start.conf
 	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
+		$(DESTDIR)/$(UNITDIR)/mdm_proxy.service.d/01-prevent-start.conf
+	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
 		$(DESTDIR)/$(UNITDIR)/packagekit.service.d/01-prevent-start.conf
 	$(INSTALL) -m0644 systemd/01-prevent-start.conf \
 		$(DESTDIR)/$(UNITDIR)/vnc.service.d/01-prevent-start.conf
