@@ -418,7 +418,7 @@ static inline void start_format_luks(invocation_data *data)
 
 static gboolean erase_data(gpointer user_data)
 {
-    static EVP_CIPHER_CTX ctx;
+    static EVP_CIPHER_CTX *ctx;
     static long long count = 0;
     invocation_data *data = user_data;
     static unsigned char inbuf[BLOCK_SIZE];
@@ -435,10 +435,9 @@ static gboolean erase_data(gpointer user_data)
          * source. This should faster than reading /dev/urandom
          * continuosly and perfectly fine from security point of view.
          *
-         * When OpenSSL is updated to 1.1 some interfaces have changed
-         * and need changes here as well. Also new ciphers are
-         * introduced and AES could be replaced with chacha that should
-         * be faster on devices without AES instructions.
+         * New ciphers have been introduced and AES could be replaced
+         * with chacha that should be faster on devices without AES
+         * instructions.
          */
         stream = fopen("/dev/urandom", "rb");
         if (fread(key, 1, KEY_SIZE, stream) < KEY_SIZE) {
@@ -449,8 +448,8 @@ static gboolean erase_data(gpointer user_data)
         key[KEY_SIZE] = '\0';
         fclose(stream);
 
-        EVP_CIPHER_CTX_init(&ctx);
-        EVP_EncryptInit_ex(&ctx, EVP_aes_128_cbc(), NULL, key, iv);
+        ctx = EVP_CIPHER_CTX_new();
+        EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv);
 
         for (i = 0; i < sizeof(inbuf); i++)
             inbuf[i] = 0;
@@ -460,7 +459,7 @@ static gboolean erase_data(gpointer user_data)
         initialized = TRUE;
     }
 
-    if (!EVP_CipherUpdate(&ctx, outbuf, &outlen, inbuf, sizeof(inbuf))) {
+    if (!EVP_CipherUpdate(ctx, outbuf, &outlen, inbuf, sizeof(inbuf))) {
         fprintf(stderr, "Warning: %s\n",
                 "Error with cipher. Device erasure incomplete.");
 
@@ -471,7 +470,6 @@ static gboolean erase_data(gpointer user_data)
         if (errno == ENOSPC) {  // Finished successfully
             // Left out EVP_EncryptFinal_ex since those
             // last few bytes are not needed here
-            EVP_CIPHER_CTX_cleanup(&ctx);
             printf("Wrote %lld bytes to erased block device.\n", count);
 
         } else {
@@ -486,6 +484,7 @@ static gboolean erase_data(gpointer user_data)
 
     // Got here, erasure finished or incomplete. Continue to next task.
     start_format_luks(data);
+    EVP_CIPHER_CTX_free(ctx);
     return FALSE;  // End looping
 }
 
