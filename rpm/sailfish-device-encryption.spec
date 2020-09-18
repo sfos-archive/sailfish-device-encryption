@@ -31,7 +31,7 @@ BuildRequires: pkgconfig(libdbusaccess)
 BuildRequires: pkgconfig(libresource)
 BuildRequires: pkgconfig(mce)
 BuildRequires: pkgconfig(ohm-ext-route)
-BuildRequires: pkgconfig(openssl)
+BuildRequires: pkgconfig(openssl) >= 1.1.0
 BuildRequires: pkgconfig(udisks2)
 BuildRequires: pkgconfig(Qt5Qml)
 BuildRequires: pkgconfig(Qt5Quick)
