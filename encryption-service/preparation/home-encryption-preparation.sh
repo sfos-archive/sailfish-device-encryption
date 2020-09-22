@@ -1,5 +1,12 @@
 #!/bin/sh
 
+# Uninstall home-debug-location package before home encryption. This will move
+# debug symbols back to rootfs or delete symbols if there is no space in rootfs.
+if rpm -q jolla-developer-mode-home-debug-location > /dev/null; then
+    echo "Uninstall jolla-developer-mode-home-debug-location before home encryption"
+    rpm -e jolla-developer-mode-home-debug-location
+fi
+
 # udisks fails if crypttab doesn't exist
 if [ ! -e /etc/crypttab ]; then
     touch /etc/crypttab
