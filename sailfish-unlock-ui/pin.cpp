@@ -97,6 +97,8 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     m_emergencyBackground->setHeight(height());
     m_emergencyBackground->setColor(color_reddish);
 
+    m_emergencyButton = new EmergencyButton("icon-encrypt-emergency-call", "icon-encrypt-emergency-call-pressed", this);
+
     m_password = new MinUi::PasswordField(this);
     m_key = new MinUi::Keypad(this);
     //% "Enter security code"
@@ -128,6 +130,8 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     m_password->setPalette(m_palette);
     m_password->setMaximumLength(DeviceLockSettings::instance()->maximumCodeLength());
     m_password->onTextChanged([this](MinUi::TextInput::Reason reason) {
+        m_emergencyButton->setVisible(m_password->text().size() < 5 || emergencyMode());
+
         if (reason == MinUi::TextInput::Deletion) {
             if (m_warningLabel) {
                 reset();
@@ -144,16 +148,15 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     m_busyIndicator = new MinUi::BusyIndicator(this);
     m_busyIndicator->setColor(m_palette.pressed);
     m_busyIndicator->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    // Should be below the warning text that is created during when error occurs. Height of the warning label is
-    // in reality fontSizeSmall but that's currently not exposed from the theme. Hence, iconSizeSmall.
-    m_busyIndicator->setY(m_label->y() + m_label->height() + MinUi::theme.iconSizeSmall + 2 * MinUi::theme.paddingLarge);
+    m_busyIndicator->centerBetween(*m_label, MinUi::Bottom, *m_password, MinUi::Top);
 
-    m_emergencyButton = new EmergencyButton("icon-encrypt-emergency-call", "icon-encrypt-emergency-call-pressed", this);
-    m_emergencyButton->setX(m_label->x());
-    m_emergencyButton->setY(m_busyIndicator->y());
+    m_emergencyButton->setX(margin);
+    m_emergencyButton->centerBetween(*m_password, MinUi::Top, *m_password, MinUi::Bottom);
 
     m_emergencyButton->onActivated([this]() {
         setEmergencyMode(!emergencyMode());
+
+        m_emergencyButton->setVisible(m_password->text().size() < 5 || emergencyMode());
     });
 
     // We have UI -> Enable shutdown on inactivity
