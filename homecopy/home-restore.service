@@ -1,0 +1,7 @@
+[Unit]
+Description=Home restoration service
+
+[Service]
+Type=oneshot
+TimeoutStopSec=60min
+ExecStart=/bin/sh /usr/share/sailfish-device-encryption/home-restore.sh

@@ -13,6 +13,7 @@
 
 #include "encryptionstatus.h"
 #include "homeinfo.h"
+#include "copyhelper.h"
 
 // using custom translator so it gets properly removed from qApp when engine is deleted
 class AppTranslator: public QTranslator
@@ -55,6 +56,7 @@ public:
 
         qmlRegisterUncreatableType<EncryptionStatus>("Sailfish.Encryption", 1, 0, "EncryptionStatus", "");
         qmlRegisterType<HomeInfo>("Sailfish.Encryption", 1, 0, "HomeInfo");
+        qmlRegisterType<CopyHelper>("Sailfish.Encryption", 1, 0, "CopyHelper");
     }
 };
 

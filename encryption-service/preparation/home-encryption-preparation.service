@@ -12,3 +12,4 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/bin/sh /usr/share/sailfish-device-encryption/home-encryption-preparation.sh
 ExecStop=/bin/sh /usr/share/sailfish-device-encryption/home-encryption-finish.sh
+

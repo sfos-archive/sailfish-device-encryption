@@ -8,10 +8,12 @@ TARGETPATH = $$[QT_INSTALL_QML]/$$MODULENAME
 TRANSLATIONS_PATH = /usr/share/translations
 
 SOURCES += $$PWD/plugin.cpp \
-    $$PWD/homeinfo.cpp
+    $$PWD/homeinfo.cpp \
+    $$PWD/copyhelper.cpp
 
 HEADERS += $$PWD/encryptionstatus.h \
-    $$PWD/homeinfo.h
+    $$PWD/homeinfo.h \
+    $$PWD/copyhelper.h
 
 PKGCONFIG += \
     systemsettings

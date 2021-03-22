@@ -16,9 +16,24 @@ for user in $USERS; do
 done
 
 # Move home content back to /home partition if it is mounted
-if $(mount | grep -q " on /home type") && [ "$HOME_WIPED" != "" ]; then
+if mount | grep -q " on /home type" && [ "$HOME_WIPED" != "" ]; then
     # /home was wiped, copy stuff back
     mv /tmp/home/.[!.]* /tmp/home/* /home/
+
+    CONF_FILE="/var/lib/sailfish-device-encryption/home_copy.conf"
+    if [ -f $CONF_FILE ] && grep -q "^/dev/" $CONF_FILE ; then
+        DEFAULTHOME=$(getent passwd 100000 | cut -d : -f 6)
+        SD_DEVICE=$(cat $CONF_FILE)
+        MNTPNT=$(echo -e $(lsblk -n -o MOUNTPOINT $SD_DEVICE))
+        SDHOME=$MNTPNT/tmp/home
+        SDTMP=$MNTPNT/tmp
+        touch ${DEFAULTHOME}/.jolla-startupwizard-done
+        touch ${DEFAULTHOME}/.jolla-startupwizard-usersession-done
+        for dir in $SDHOME/*/.local; do
+            mv -f $dir ${dir#$SDTMP}
+        done
+    fi
+
     # set device owner's locale if it wasn't set
     if [ ! -e /home/.system/var/lib/environment/100000/locale.conf ]; then
         mkdir -p /home/.system/var/lib/environment/100000

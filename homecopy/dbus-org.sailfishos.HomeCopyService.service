@@ -1,0 +1,8 @@
+# Copy home partition
+[Unit]
+Description=Copy home partition
+
+[Service]
+Type=dbus
+BusName=org.sailfishos.HomeCopyService
+ExecStart=/usr/libexec/sailfish-home-copy-service

@@ -1,0 +1,7 @@
+[Unit]
+Description=Copy home to an external memory card
+
+[Service]
+Type=simple
+RemainAfterExit=no
+ExecStart=/bin/sh /usr/share/sailfish-device-encryption/home-encryption-copy.sh
