@@ -146,8 +146,10 @@ static void got_systemd_manager(GObject *proxy, GAsyncResult *res, gpointer data
 gboolean set_copy_location(gchar *path)
 {
     if (!strcmp(path, "")) {
-        remove(copy_conf_file);
-        return;
+        int ret = remove(copy_conf_file);
+        if (ret)
+            fprintf(stderr, "Could not remove file %s: %m\n", copy_conf_file);
+        return !ret;
     }
     printf("Setting copy location to %s \n", path);
     FILE *f = NULL;
