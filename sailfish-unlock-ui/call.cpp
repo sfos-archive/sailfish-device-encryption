@@ -64,6 +64,11 @@ Call::~Call()
         delete m_routeManager;
         m_routeManager = nullptr;
     }
+    if (m_systemBus) {
+        delete m_systemBus;
+        m_systemBus = nullptr;
+    }
+
     free(m_rc);
     m_rc = nullptr;
     free(m_rset);
