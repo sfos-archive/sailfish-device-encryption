@@ -51,8 +51,8 @@ Agent::Agent(MinUi::DBus::EventLoop *eventLoop)
 
 Agent::~Agent()
 {
-    if (m_ui)
-        delete m_ui;
+    delete m_ui;
+    m_ui = nullptr;
 }
 
 bool Agent::checkIfAgentCanRun()
