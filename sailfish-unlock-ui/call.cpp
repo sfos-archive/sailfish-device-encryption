@@ -512,6 +512,7 @@ void Call::connectResources()
     msg.record.rset.share = 0;
     msg.record.rset.mask = 0;
     msg.record.klass = (char *)"call";
+    msg.record.app_id = (char *)"";
     msg.record.mode = RESMSG_MODE_AUTO_RELEASE;
 
     m_resourceStatus = ResourcesConnecting;
