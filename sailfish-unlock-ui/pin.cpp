@@ -224,6 +224,8 @@ void PinUi::emergencyModeChanged()
     /* Handle UI changes */
     cancelTimer();
     m_password->setText("");
+    m_password->setMaskingEnabled(!emergencyMode());
+
     if (emergencyMode()) {
         m_emergencyBackground->setVisible(true);
         m_label->setVisible(false);
@@ -245,8 +247,6 @@ void PinUi::emergencyModeChanged()
         palette.pressed = color_white;
 
         m_password->setPalette(palette);
-        m_password->setEchoDelay(-1); // Disable number masking
-
         m_key->setAcceptVisible(false);
         m_key->setCancelVisible(true);
         m_key->setPalette(palette);
@@ -264,7 +264,6 @@ void PinUi::emergencyModeChanged()
         m_busyIndicator->setColor(m_palette.pressed);
 
         m_password->setPalette(m_palette);
-        m_password->setEchoDelay(100); // Default number masking
         m_key->setPalette(m_palette);
         m_key->setAcceptText(nullptr);
         m_key->setAcceptVisible(false);
