@@ -130,7 +130,7 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     m_password->setPalette(m_palette);
     m_password->setMaximumLength(DeviceLockSettings::instance()->maximumCodeLength());
     m_password->onTextChanged([this](MinUi::TextInput::Reason reason) {
-        m_emergencyButton->setVisible(m_password->text().size() < 5 || emergencyMode());
+        m_emergencyButton->setVisible(m_password->text().size() < 5 && !emergencyMode());
 
         if (reason == MinUi::TextInput::Deletion) {
             if (m_warningLabel) {
@@ -156,7 +156,7 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     m_emergencyButton->onActivated([this]() {
         setEmergencyMode(!emergencyMode());
 
-        m_emergencyButton->setVisible(m_password->text().size() < 5 || emergencyMode());
+        m_emergencyButton->setVisible(m_password->text().size() < 5 && !emergencyMode());
     });
 
     // We have UI -> Enable shutdown on inactivity
@@ -225,6 +225,7 @@ void PinUi::emergencyModeChanged()
     cancelTimer();
     m_password->setText("");
     m_password->setMaskingEnabled(!emergencyMode());
+    m_emergencyButton->setVisible(!emergencyMode());
 
     if (emergencyMode()) {
         m_emergencyBackground->setVisible(true);
@@ -252,7 +253,6 @@ void PinUi::emergencyModeChanged()
         m_key->setPalette(palette);
         m_key->setAcceptText(m_start_call);
 
-        m_emergencyButton->setVisible(false);
         m_busyIndicator->setColor(palette.normal);
     } else {
         m_call.endCall(); // Just in case
@@ -267,7 +267,6 @@ void PinUi::emergencyModeChanged()
         m_key->setPalette(m_palette);
         m_key->setAcceptText(nullptr);
         m_key->setAcceptVisible(false);
-        m_emergencyButton->setVisible(true);
         if (m_speakerButton)
             m_speakerButton->setVisible(false);
 
