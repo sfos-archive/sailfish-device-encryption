@@ -38,7 +38,6 @@ Call::Call(MinUi::DBus::EventLoop *eventLoop)
     : m_eventLoop(eventLoop)
     , m_routeManager(nullptr)
     , m_voiceCallManager(nullptr)
-    , m_systemBus(nullptr)
     , m_phoneNumber("")
     , m_statusCallback(nullptr)
     , m_callObjectPath("")
@@ -56,18 +55,11 @@ Call::~Call()
     endCall();
     if (m_resourceStatus == ResourceStatus::ResourcesAcquired)
         disconnectResources();
-    if (m_voiceCallManager) {
-        delete m_voiceCallManager;
-        m_voiceCallManager = nullptr;
-    }
-    if (m_routeManager) {
-        delete m_routeManager;
-        m_routeManager = nullptr;
-    }
-    if (m_systemBus) {
-        delete m_systemBus;
-        m_systemBus = nullptr;
-    }
+    delete m_voiceCallManager;
+    m_voiceCallManager = nullptr;
+    delete m_routeManager;
+    m_routeManager = nullptr;
+    m_systemBus.reset(nullptr);
 
     free(m_rc);
     m_rc = nullptr;
@@ -181,7 +173,7 @@ void Call::placeCall()
     DBusMessage *message = dbus_message_new_method_call(OFONO_SERVICE,
             OFONO_MODEM_MANAGER_PATH, OFONO_MODEM_MANAGER_INTERFACE, "GetAvailableModems");
     DBusPendingCall *call = nullptr;
-    if (!dbus_connection_send_with_reply(m_systemBus, message, &call, -1) || !call ||
+    if (!dbus_connection_send_with_reply(m_systemBus.data(), message, &call, -1) || !call ||
             !setPendingCallNotify(call, std::mem_fn(&Call::handleModemPath))) {
         log_err("Could not read available modems");
         m_ofonoStatus = OfonoError;
@@ -210,8 +202,7 @@ void Call::handleModemPath(DBusPendingCall *call)
             log_err(error.name << ": " << error.message);
 
         } else {
-            if (m_voiceCallManager)  // This should not be called twice but just in case that happens
-                delete m_voiceCallManager;
+            delete m_voiceCallManager; // This should not be called twice but just in case that happens
             m_voiceCallManager = new MinDBus::Object(m_systemBus, OFONO_SERVICE, objectArray[0], OFONO_VOICECALL_MANAGER_INTERFACE);
 
             m_voiceCallManager->connect<MinDBus::ObjectPath>("CallRemoved",
@@ -254,7 +245,7 @@ void Call::bringModemOnline()
     dbus_message_iter_close_container(&iter, &subiter);
 
     DBusPendingCall *call = nullptr;
-    if (!dbus_connection_send_with_reply(m_systemBus, message, &call, -1) || !call ||
+    if (!dbus_connection_send_with_reply(m_systemBus.data(), message, &call, -1) || !call ||
             !setPendingCallNotify(call, std::mem_fn(&Call::handleModemOnline))) {
         log_err("Could not set modem online! Can not call!");
         m_ofonoStatus = OfonoError;
@@ -289,7 +280,7 @@ void Call::checkForNonEmergencyNumber() {
     DBusMessage *message = dbus_message_new_method_call(OFONO_SERVICE,
             m_voiceCallManager->path(), m_voiceCallManager->interface(), "GetProperties");
     DBusPendingCall *call = nullptr;
-    if (!dbus_connection_send_with_reply(m_systemBus, message, &call, -1) || !call ||
+    if (!dbus_connection_send_with_reply(m_systemBus.data(), message, &call, -1) || !call ||
             !setPendingCallNotify(call, std::mem_fn(&Call::handleEmergencyNumbersProperty))) {
         log_err("Could not read emergency numbers. Not checking the number.");
         if (m_ofonoStatus == OfonoInitializing) {
@@ -469,7 +460,7 @@ void Call::startAcquiringResources()
         acquiringResources();
 
     } else {
-        m_rc = resproto_init(RESPROTO_ROLE_CLIENT, RESPROTO_TRANSPORT_DBUS, NULL, m_systemBus);
+        m_rc = resproto_init(RESPROTO_ROLE_CLIENT, RESPROTO_TRANSPORT_DBUS, NULL, m_systemBus.data());
         if (!m_rc) {
             log_debug("Resproto init failed");
             m_resourceStatus = ResourcesError;
@@ -512,6 +503,7 @@ void Call::connectResources()
     msg.record.rset.share = 0;
     msg.record.rset.mask = 0;
     msg.record.klass = (char *)"call";
+    msg.record.app_id = (char *)"";
     msg.record.mode = RESMSG_MODE_AUTO_RELEASE;
 
     m_resourceStatus = ResourcesConnecting;

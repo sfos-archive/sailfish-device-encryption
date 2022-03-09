@@ -86,7 +86,7 @@ private:
     MinUi::DBus::EventLoop *m_eventLoop;
     MinDBus::Object *m_routeManager;
     MinDBus::Object *m_voiceCallManager;
-    DBusConnection *m_systemBus;
+    MinDBus::Connection m_systemBus;
     std::string m_phoneNumber;
     Callback m_statusCallback;
     std::string m_callObjectPath;
