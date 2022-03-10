@@ -49,6 +49,12 @@ PinUi::~PinUi()
     delete m_emergencyButton;
     m_emergencyButton = nullptr;
 
+    delete m_keypadButton;
+    m_keypadButton = nullptr;
+
+    delete m_keyboardButton;
+    m_keyboardButton = nullptr;
+
     delete m_emergencyBackground;
     m_emergencyBackground = nullptr;
 
@@ -81,6 +87,8 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     , m_emergencyLabel(nullptr)
     , m_call(Call(eventLoop))
     , m_speakerButton(nullptr)
+    , m_keypadButton(nullptr)
+    , m_keyboardButton(nullptr)
     , m_inactivityShutdownEnabled(false)
     , m_inactivityShutdownTimer(0)
     , m_batteryEmptyShutdownRequested(false)
@@ -101,6 +109,9 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     m_emergencyBackground->setColor(color_reddish);
 
     m_emergencyButton = new EmergencyButton("icon-encrypt-emergency-call", "icon-encrypt-emergency-call-pressed", this);
+    m_keypadButton = new MinUi::IconButton("icon-m-encryption-dialpad", this);
+    m_keyboardButton = new MinUi::IconButton("icon-m-encryption-keyboard", this);
+
     m_password = new MinUi::PasswordField(this);
     m_keypad = new MinUi::Keypad(this);
 
@@ -164,6 +175,22 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
         setEmergencyMode(!emergencyMode());
 
         m_emergencyButton->setVisible(m_password->text().size() < 5 && !emergencyMode());
+    });
+
+    m_keypadButton->setX(MinUi::theme.paddingLarge);
+    m_keypadButton->setY(MinUi::theme.paddingLarge);
+
+    m_keyboardButton->setX(MinUi::theme.paddingLarge);
+    m_keyboardButton->setY(MinUi::theme.paddingLarge);
+
+    m_keypadButton->onActivated([this]() {
+       m_keypadInUse = true;
+       updateInputItemVisibilities();
+    });
+
+    m_keyboardButton->onActivated([this]() {
+       m_keypadInUse = false;
+       updateInputItemVisibilities();
     });
 
     // We have UI -> Enable shutdown on inactivity
@@ -739,6 +766,12 @@ void PinUi::handleKeyPress(int code, char character)
 
 void PinUi::updateInputItemVisibilities()
 {
+    m_keypadButton->setVisible(!emergencyMode() && !m_keypadInUse);
+    m_keyboardButton->setVisible(!emergencyMode() && m_keypadInUse);
+    if (!emergencyMode() && m_keypadInUse) {
+        m_password->setMaskingEnabled(true);
+    }
+
     bool keypadVisible = emergencyMode() || m_keypadInUse;
     m_keypad->setVisible(keypadVisible);
     m_keyboard->setVisible(!keypadVisible);

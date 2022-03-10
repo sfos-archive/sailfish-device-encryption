@@ -149,6 +149,8 @@ private:
     MinUi::Label *m_emergencyLabel;
     Call m_call;
     MinUi::IconButton *m_speakerButton;
+    MinUi::IconButton *m_keypadButton;
+    MinUi::IconButton *m_keyboardButton;
     bool m_inactivityShutdownEnabled;
     int m_inactivityShutdownTimer;
     bool m_batteryEmptyShutdownRequested;
