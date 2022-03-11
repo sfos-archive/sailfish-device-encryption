@@ -13,8 +13,6 @@
 #include <sailfish-minui-dbus/eventloop.h>
 #include <sailfish-minui/display.h>
 
-#define ACCEPT_CODE 28
-#define CANCEL_CODE 1
 #define EMERGENCY_MODE_TIMEOUT 5000
 
 using namespace Sailfish;
@@ -36,8 +34,11 @@ PinUi::~PinUi()
     delete m_label;
     m_label = nullptr;
 
-    delete m_key;
-    m_key = nullptr;
+    delete m_keypad;
+    m_keypad = nullptr;
+
+    delete m_keyboard;
+    m_keyboard = nullptr;
 
     delete m_password;
     m_password = nullptr;
@@ -47,6 +48,12 @@ PinUi::~PinUi()
 
     delete m_emergencyButton;
     m_emergencyButton = nullptr;
+
+    delete m_keypadButton;
+    m_keypadButton = nullptr;
+
+    delete m_keyboardButton;
+    m_keyboardButton = nullptr;
 
     delete m_emergencyBackground;
     m_emergencyBackground = nullptr;
@@ -65,7 +72,8 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     : MinUi::Window(eventLoop)
     , m_agent(agent)
     , m_password(nullptr)
-    , m_key(nullptr)
+    , m_keyboard(nullptr)
+    , m_keypad(nullptr)
     , m_label(nullptr)
     , m_warningLabel(nullptr)
     , m_busyIndicator(nullptr)
@@ -79,10 +87,13 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     , m_emergencyLabel(nullptr)
     , m_call(Call(eventLoop))
     , m_speakerButton(nullptr)
+    , m_keypadButton(nullptr)
+    , m_keyboardButton(nullptr)
     , m_inactivityShutdownEnabled(false)
     , m_inactivityShutdownTimer(0)
     , m_batteryEmptyShutdownRequested(false)
     , m_batteryEmptyShutdownTimer(0)
+    , m_keypadInUse(true)
     , m_exitNotification(nullptr)
 {
     m_agent->setBlankPreventWanted(true);
@@ -98,9 +109,12 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     m_emergencyBackground->setColor(color_reddish);
 
     m_emergencyButton = new EmergencyButton("icon-encrypt-emergency-call", "icon-encrypt-emergency-call-pressed", this);
+    m_keypadButton = new MinUi::IconButton("icon-m-encryption-dialpad", this);
+    m_keyboardButton = new MinUi::IconButton("icon-m-encryption-keyboard", this);
 
     m_password = new MinUi::PasswordField(this);
-    m_key = new MinUi::Keypad(this);
+    m_keypad = new MinUi::Keypad(this);
+
     //% "Enter security code"
     m_label = new MinUi::Label(qtTrId("sailfish-device-encryption-unlock-ui-la-enter_security_code"), this);
 
@@ -112,16 +126,20 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
     m_palette.disabled = m_palette.normal;
     m_palette.selected = m_palette.normal;
 
-    m_key->setCancelVisible(false);
-    m_key->setAcceptVisible(false);
-    m_key->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_key->setY(window()->height() - m_key->height() - MinUi::theme.paddingMedium - window()->height()/20);
-    m_key->setPalette(m_palette);
+    m_keypad->setCancelVisible(false);
+    m_keypad->setAcceptVisible(false);
+    m_keypad->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
+    m_keypad->setY(window()->height() - m_keypad->height() - MinUi::theme.paddingMedium - window()->height()/20);
+    m_keypad->setPalette(m_palette);
+
+    m_keyboard = new MinUi::Keyboard(this);
+    m_keyboard->align(MinUi::Bottom, *this, MinUi::Bottom);
+    m_keyboard->horizontalFill(*this);
 
     window()->disablePowerButtonSelect();
 
-    // This has dependencies to the m_key
-    m_password->setY(std::min(m_key->y(), window()->height() - MinUi::theme.itemSizeSmall) - m_password->height() - (MinUi::theme.itemSizeSmall / 2));
+    int inputY = std::min(m_keypad->y(), m_keyboard->y());
+    m_password->setY(inputY - m_password->height() - (MinUi::theme.itemSizeSmall / 2));
 
     // Screen width - we have approximately 2 keys sizes visible as digits are centered - paddings on the edges.
     int margin = (width() - (MinUi::theme.itemSizeHuge * 2.0) - (2 * MinUi::theme.paddingLarge)) / 2;
@@ -140,9 +158,9 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
         updateAcceptVisibility();
     });
 
-    // This has dependencies to the m_key
     m_label->centerBetween(*this, MinUi::Left, *this, MinUi::Right);
-    m_label->setY(std::min(m_key->y() / 4 + headingVerticalOffset, m_key->y() - m_label->height() - MinUi::theme.paddingMedium));
+    m_label->setY(std::min(inputY / 4 + headingVerticalOffset,
+                           inputY - m_label->height() - MinUi::theme.paddingMedium));
     m_label->setColor(m_palette.pressed);
 
     m_busyIndicator = new MinUi::BusyIndicator(this);
@@ -159,50 +177,30 @@ PinUi::PinUi(Agent *agent, MinUi::DBus::EventLoop *eventLoop)
         m_emergencyButton->setVisible(m_password->text().size() < 5 && !emergencyMode());
     });
 
+    m_keypadButton->setX(MinUi::theme.paddingLarge);
+    m_keypadButton->setY(MinUi::theme.paddingLarge);
+
+    m_keyboardButton->setX(MinUi::theme.paddingLarge);
+    m_keyboardButton->setY(MinUi::theme.paddingLarge);
+
+    m_keypadButton->onActivated([this]() {
+       m_keypadInUse = true;
+       updateInputItemVisibilities();
+    });
+
+    m_keyboardButton->onActivated([this]() {
+       m_keypadInUse = false;
+       updateInputItemVisibilities();
+    });
+
     // We have UI -> Enable shutdown on inactivity
     setInactivityShutdownEnabled(true);
 
-    m_key->onKeyPress([this](int code, char character) {
-        if (code == ACCEPT_CODE) {
-            if (emergencyMode()) {
-                if (m_call.calling()) {
-                    // End the ongoing call
-                    m_call.endCall();
-                } else {
-                    // Make the call
-                    std::string number = m_password->text();
-                    m_call.makeCall(number, [this](Call::Status status) {
-                        setEmergencyCallStatus(status);
-                    });
-                }
-            } else {
-                // Send the password
-                m_canShowError = true;
-                createTimer(16, [this]() {
-                    cancelTimer();
-                    disableAll();
-                    m_agent->sendPassword(m_password->text());
-                });
-            }
-        } else if (code == CANCEL_CODE) {
-            if (m_call.calling()) {
-                // End the ongoing call
-                m_call.endCall();
-            } else {
-                // Cancel pressed, get out of the emergency call mode
-                setEmergencyMode(false);
-            }
-        } else if (character) {
-            cancelTimer();
-            if (m_warningLabel) {
-                reset();
-            }
-            m_password->setText(m_password->text() + character);
-        }
+    // FIXME: ideally the text field would handle the input
+    m_keypad->onKeyPress([this](int code, char character){ handleKeyPress(code, character); });
+    m_keyboard->onKeyPress([this](int code, char character){ handleKeyPress(code, character); });
 
-        // Postpone inactivity shutdown
-        restartInactivityShutdownTimer();
-    });
+    updateInputItemVisibilities();
 }
 
 bool PinUi::emergencyMode() const
@@ -226,6 +224,7 @@ void PinUi::emergencyModeChanged()
     m_password->setText("");
     m_password->setMaskingEnabled(!emergencyMode());
     m_emergencyButton->setVisible(!emergencyMode());
+    updateInputItemVisibilities();
 
     if (emergencyMode()) {
         m_emergencyBackground->setVisible(true);
@@ -248,10 +247,10 @@ void PinUi::emergencyModeChanged()
         palette.pressed = color_white;
 
         m_password->setPalette(palette);
-        m_key->setAcceptVisible(false);
-        m_key->setCancelVisible(true);
-        m_key->setPalette(palette);
-        m_key->setAcceptText(m_start_call);
+        m_keypad->setAcceptVisible(false);
+        m_keypad->setCancelVisible(true);
+        m_keypad->setPalette(palette);
+        m_keypad->setAcceptText(m_start_call);
 
         m_busyIndicator->setColor(palette.normal);
     } else {
@@ -259,14 +258,14 @@ void PinUi::emergencyModeChanged()
         m_emergencyBackground->setVisible(false);
         m_emergencyLabel->setVisible(false);
         m_label->setVisible(true);
-        m_key->setAcceptVisible(false);
-        m_key->setCancelVisible(false);
+        m_keypad->setAcceptVisible(false);
+        m_keypad->setCancelVisible(false);
         m_busyIndicator->setColor(m_palette.pressed);
 
         m_password->setPalette(m_palette);
-        m_key->setPalette(m_palette);
-        m_key->setAcceptText(nullptr);
-        m_key->setAcceptVisible(false);
+        m_keypad->setPalette(m_palette);
+        m_keypad->setAcceptText(nullptr);
+        m_keypad->setAcceptVisible(false);
         if (m_speakerButton)
             m_speakerButton->setVisible(false);
 
@@ -470,9 +469,11 @@ void PinUi::updateAcceptVisibility()
         return;
 
     if (m_password->text().length() < DeviceLockSettings::instance()->minimumCodeLength()) {
-        m_key->setAcceptVisible(false);
+        m_keypad->setAcceptVisible(false);
+        m_keyboard->setEnterEnabled(false);
     } else {
-        m_key->setAcceptVisible(true);
+        m_keypad->setAcceptVisible(true);
+        m_keyboard->setEnterEnabled(true);
     }
 }
 
@@ -546,8 +547,10 @@ void PinUi::dsmeStateChanged()
         // Hide everything
         if (m_password)
             m_password->setVisible(false);
-        if (m_key)
-            m_key->setVisible(false);
+        if (m_keypad)
+            m_keypad->setVisible(false);
+        if (m_keyboard)
+            m_keyboard->setVisible(false);
         if (m_label)
             m_label->setVisible(false);
         if (m_warningLabel)
@@ -622,7 +625,7 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
             m_busyIndicator->setRunning(true);
             destroyWarningLabel();
             m_warningLabel = createLabel(m_calling_emergency, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
-            m_key->setAcceptText(m_end_call);
+            m_keypad->setAcceptText(m_end_call);
             // Cancel possible emergency mode timeout
             cancelTimer();
             break;
@@ -650,25 +653,25 @@ void PinUi::setEmergencyCallStatus(Call::Status status)
 
             destroyWarningLabel();
             m_warningLabel = createLabel(m_calling_emergency, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
-            m_key->setAcceptText(m_end_call);
+            m_keypad->setAcceptText(m_end_call);
             break;
         case Call::Status::Error:
             m_busyIndicator->setRunning(false);
             destroyWarningLabel();
             m_warningLabel = createLabel(m_emergency_call_failed, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
-            m_key->setAcceptText(m_start_call);
+            m_keypad->setAcceptText(m_start_call);
             break;
         case Call::Status::InvalidNumber:
             m_busyIndicator->setRunning(false);
             destroyWarningLabel();
             m_warningLabel = createLabel(m_invalid_emergency_number, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
-            m_key->setAcceptText(m_start_call);
+            m_keypad->setAcceptText(m_start_call);
             break;
         case Call::Status::Ended:
             m_busyIndicator->setRunning(false);
             destroyWarningLabel();
             m_warningLabel = createLabel(m_emergency_call_ended, m_label->y() + m_label->height() + MinUi::theme.paddingLarge);
-            m_key->setAcceptText(m_start_call);
+            m_keypad->setAcceptText(m_start_call);
             createTimer(EMERGENCY_MODE_TIMEOUT, [this]() {
                 setEmergencyMode(false);
             });
@@ -714,4 +717,65 @@ void PinUi::cancelTimer()
         eventLoop()->cancelTimer(m_timer);
         m_timer = 0;
     }
+}
+
+void PinUi::handleKeyPress(int code, char character)
+{
+    if (code == KEY_ENTER) {
+        if (emergencyMode()) {
+            if (m_call.calling()) {
+                // End the ongoing call
+                m_call.endCall();
+            } else {
+                // Make the call
+                std::string number = m_password->text();
+                m_call.makeCall(number, [this](Call::Status status) {
+                    setEmergencyCallStatus(status);
+                });
+            }
+        } else {
+            // Send the password
+            m_canShowError = true;
+            createTimer(16, [this]() {
+                cancelTimer();
+                disableAll();
+                m_agent->sendPassword(m_password->text());
+            });
+        }
+    } else if (code == KEY_ESC) {
+        if (m_call.calling()) {
+            // End the ongoing call
+            m_call.endCall();
+        } else {
+            // Cancel pressed, get out of the emergency call mode
+            setEmergencyMode(false);
+        }
+    } else if (code == KEY_BACKSPACE) {
+        m_password->backspace();
+    } else if (character) {
+        cancelTimer();
+        if (m_warningLabel) {
+            reset();
+        }
+        m_password->setText(m_password->text() + character);
+    }
+
+    // Postpone inactivity shutdown
+    restartInactivityShutdownTimer();
+}
+
+void PinUi::updateInputItemVisibilities()
+{
+    m_keypadButton->setVisible(!emergencyMode() && !m_keypadInUse);
+    m_keyboardButton->setVisible(!emergencyMode() && m_keypadInUse);
+    if (!emergencyMode() && m_keypadInUse) {
+        m_password->setMaskingEnabled(true);
+    }
+
+    bool keypadVisible = emergencyMode() || m_keypadInUse;
+    m_keypad->setVisible(keypadVisible);
+    m_keyboard->setVisible(!keypadVisible);
+
+    m_password->setExtraButtonMode(keypadVisible ? MinUi::PasswordField::ShowBackspace
+                                                 : MinUi::PasswordField::ShowTextVisibilityToggle);
 }

@@ -92,11 +92,15 @@ private:
     void cancelBatteryEmptyShutdown();
     void onBatteryEmptyShutdown();
 
+    void handleKeyPress(int code, char character);
+    void updateInputItemVisibilities();
+
 private:
     Agent *m_agent;
 
     MinUi::PasswordField *m_password;
-    MinUi::Keypad *m_key;
+    MinUi::Keyboard *m_keyboard;
+    MinUi::Keypad *m_keypad;
     MinUi::Label *m_label;
     MinUi::Label *m_warningLabel;
     MinUi::BusyIndicator *m_busyIndicator;
@@ -145,10 +149,13 @@ private:
     MinUi::Label *m_emergencyLabel;
     Call m_call;
     MinUi::IconButton *m_speakerButton;
+    MinUi::IconButton *m_keypadButton;
+    MinUi::IconButton *m_keyboardButton;
     bool m_inactivityShutdownEnabled;
     int m_inactivityShutdownTimer;
     bool m_batteryEmptyShutdownRequested;
     int m_batteryEmptyShutdownTimer;
+    bool m_keypadInUse;
     MinUi::Label *m_exitNotification;
 };
 }
