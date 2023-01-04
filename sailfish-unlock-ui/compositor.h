@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Jolla Ltd.
+ * Copyright (c) 2019 - 2023 Jolla Ltd.
  *
  * License: Proprietary
  */
@@ -128,6 +128,7 @@ private:
     void updateInternallyCacheUpdatesEnabled(bool updatesEnabled);
     DBusMessage *handleUpdatesEnabledMethodCallMessage(DBusMessage *methodCallMessage);
     DBusMessage *handleTopmostWindowPidHandlerMethodCallMessage(DBusMessage *methodCallMessage);
+    DBusMessage *handleGetRequirementsHandlerMethodCallMessage(DBusMessage *methodCallMessage);
     DBusMessage *handleIntrospectMethodCallMessage(DBusMessage *methodCallMessage);
     bool compositorNameOwned() const;
     void updateInternallyCachedCompositorOwned(bool compositorNameOwned);
