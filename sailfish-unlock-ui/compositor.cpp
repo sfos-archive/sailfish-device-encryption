@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 Jolla Ltd.
+ * Copyright (c) 2019 - 2023 Jolla Ltd.
  *
  * License: Proprietary
  */
@@ -21,7 +21,13 @@
 #define COMPOSITOR_INTERFACE "org.nemomobile.compositor"
 #define COMPOSITOR_METHOD_SET_UPDATES_ENABLED "setUpdatesEnabled"
 #define COMPOSITOR_METHOD_GET_TOPMOST_WINDOW_PID "privateTopmostWindowProcessId"
+#define COMPOSITOR_METHOD_GET_SETUP_ACTIONS "privateGetSetupActions"
 #define COMPOSITOR_SIGNAL_TOPMOST_WINDOW_PID_CHANGED "privateTopmostWindowProcessIdChanged"
+
+#define COMPOSITOR_ACTION_NONE 0
+#define COMPOSITOR_ACTION_STOP_HWC (1<<0)
+#define COMPOSITOR_ACTION_START_HWC (1<<1)
+#define COMPOSITOR_ACTION_RESTART_HWC (1<<2)
 
 #define SYSTEMD_SERVICE "org.freedesktop.systemd1"
 #define SYSTEMD_MANAGER_PATH "/org/freedesktop/systemd1"
@@ -902,6 +908,17 @@ DBusMessage *Compositor::handleTopmostWindowPidHandlerMethodCallMessage(DBusMess
     return replyMessage;
 }
 
+DBusMessage *Compositor::handleGetRequirementsHandlerMethodCallMessage(DBusMessage *methodCallMessage)
+{
+    /* Be prepared to tell mce that HW compositor service should be stopped before
+     * we are given permission to draw via setUpdatesEnabled() method call.
+     */
+    DBusMessage *replyMessage = dbus_message_new_method_return(methodCallMessage);
+    dbus_uint32_t flagsAsUint32 = COMPOSITOR_ACTION_STOP_HWC;
+    dbus_message_append_args(replyMessage, DBUS_TYPE_UINT32, &flagsAsUint32, DBUS_TYPE_INVALID);
+    return replyMessage;
+}
+
 DBusMessage *Compositor::handleIntrospectMethodCallMessage(DBusMessage *methodCallMessage)
 {
     static const char *xmlDataString =
@@ -1442,6 +1459,10 @@ Compositor::MethodCallMessageHandler Compositor::s_systemBusMethodCallHandlers[]
     {
         &Compositor::handleTopmostWindowPidHandlerMethodCallMessage,
         COMPOSITOR_SERVICE, COMPOSITOR_PATH, COMPOSITOR_INTERFACE, COMPOSITOR_METHOD_GET_TOPMOST_WINDOW_PID
+    },
+    {
+        &Compositor::handleGetRequirementsHandlerMethodCallMessage,
+        COMPOSITOR_SERVICE, COMPOSITOR_PATH, COMPOSITOR_INTERFACE, COMPOSITOR_METHOD_GET_SETUP_ACTIONS
     },
     {
         &Compositor::handleIntrospectMethodCallMessage,
