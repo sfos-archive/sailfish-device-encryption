@@ -27,8 +27,9 @@ if mount | grep -q " on /home type" && [ "$HOME_WIPED" != "" ]; then
         MNTPNT=$(echo -e $(lsblk -n -o MOUNTPOINT $SD_DEVICE))
         SDHOME=$MNTPNT/tmp/home
         SDTMP=$MNTPNT/tmp
-        touch ${DEFAULTHOME}/.jolla-startupwizard-done
-        touch ${DEFAULTHOME}/.jolla-startupwizard-usersession-done
+        mkdir -p ${DEFAULTHOME}/.config
+        touch ${DEFAULTHOME}/.config/jolla-startupwizard-done
+        touch ${DEFAULTHOME}/.config/jolla-startupwizard-usersession-done
         for dir in $SDHOME/*/.local; do
             mv -f $dir ${dir#$SDTMP}
         done

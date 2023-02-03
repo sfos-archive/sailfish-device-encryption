@@ -68,7 +68,7 @@ fi
 if [ ! -f /usr/lib/startup/qa-encrypt-device ]; then
     for user in $USERS; do
         USER_HOME=$(getent passwd $user | cut -d : -f 6)
-        rm -f /tmp${USER_HOME}/.jolla-startupwizard*
+        rm -f /tmp${USER_HOME}/.config/jolla-startupwizard*
     done
 fi
 
