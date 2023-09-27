@@ -2,8 +2,8 @@ Name:       sailfish-device-encryption
 Summary:    Sailfish Device Encryption
 Version:    0.7.3
 Release:    1
-License:    Proprietary
-URL:        https://bitbucket.org/jolla/ui-sailfish-device-encryption
+License:    BSD
+URL:        https://github.com/sailfishos/sailfish-device-encryption
 Source0:    %{name}-%{version}.tar.bz2
 
 %define unitdir /usr/lib/systemd/system/
@@ -193,6 +193,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 
 %files unlock-ui
 %defattr(-,root,root,-)
+%license LICENSE.BSD
 %{unitdir}/sailfish-unlock-agent.path
 %{unitdir}/sailfish-unlock-agent.service
 %{unitdir}/jolla-actdead-charging.service
@@ -202,6 +203,7 @@ mkdir -p %{buildroot}%{_sharedstatedir}/%{name}
 
 %files service
 %defattr(-,root,root,-)
+%license LICENSE.BSD
 %ghost %{_sysconfdir}/crypttab
 %{_libexecdir}/sailfish-encryption-service
 %{unitdir}/dbus-%{dbusname}.service
@@ -241,6 +243,7 @@ fi
 
 %files settings
 %defattr(-,root,root,-)
+%license LICENSE.BSD
 %{_datadir}/jolla-settings
 %{_libdir}/qt5/qml/Sailfish/Encryption
 %{_datadir}/translations/settings-*.qm
@@ -253,6 +256,7 @@ fi
 
 %files qa
 %defattr(-,root,root,-)
+%license LICENSE.BSD
 /usr/lib/startup/qa-encrypt-device
 %{_datadir}/qa-encrypt-device/main.qml
 %attr(755, root, -) %{_oneshotdir}/50-enable-home-encryption
@@ -261,6 +265,7 @@ fi
 
 %files homecopy
 %defattr(-,root,root,-)
+%license LICENSE.BSD
 %{unitdir}/dbus-%{copydbusname}.service
 %{_libexecdir}/sailfish-home-copy-service
 %{unitdir}/home-encryption-copy.service
